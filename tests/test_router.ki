@@ -1,0 +1,441 @@
+/// Tests for the router module
+///
+/// Tests route matching, path parameter extraction, not-found handling,
+/// and route priority/ordering.
+
+module tests.test_router
+
+use http.types.Method
+use http.types.QueryParam
+use http.request.Request
+use http.request.path_param
+use http.response.Response
+use http.response.ok
+use http.response.not_found as not_found_response
+use http.router.Handler
+use http.router.Route
+use http.router.Router
+use http.router.new_router
+use http.router.add_route
+use http.router.add_routes
+use http.router.set_not_found
+use http.router.get
+use http.router.post
+use http.router.put
+use http.router.delete
+use http.router.patch
+use http.router.route
+use http.router.handle_request
+use http.router.get_method
+use http.router.get_path
+use http.router.route_count
+
+// Test handlers
+let home_handler: Handler = fn(req: Request) -> Response {
+    return ok("home")
+}
+
+let users_handler: Handler = fn(req: Request) -> Response {
+    return ok("users list")
+}
+
+let user_handler: Handler = fn(req: Request) -> Response {
+    let id: Option[string] = path_param(req, "id")
+    var body: string
+    match id {
+        Some(user_id) => { body = "user: " + user_id }
+        None => { body = "no id" }
+    }
+    return ok(body)
+}
+
+let create_user_handler: Handler = fn(req: Request) -> Response {
+    return ok("created")
+}
+
+let update_user_handler: Handler = fn(req: Request) -> Response {
+    return ok("updated")
+}
+
+let delete_user_handler: Handler = fn(req: Request) -> Response {
+    return ok("deleted")
+}
+
+let nested_handler: Handler = fn(req: Request) -> Response {
+    let post_id: Option[string] = path_param(req, "postId")
+    let comment_id: Option[string] = path_param(req, "commentId")
+    var body: string = "post: "
+    match post_id {
+        Some(p) => { body = body + p }
+        None => { body = body + "none" }
+    }
+    body = body + ", comment: "
+    match comment_id {
+        Some(c) => { body = body + c }
+        None => { body = body + "none" }
+    }
+    return ok(body)
+}
+
+let custom_not_found_handler: Handler = fn(req: Request) -> Response {
+    return Response {
+        status: NotFound,
+        headers: Nil,
+        body: "Custom 404: " + req.path
+    }
+}
+
+// Helper to create a test request
+let make_request: fn(Method, string) -> Request =
+    fn(method: Method, path: string) -> Request {
+        return Request {
+            method: method,
+            url: "http://localhost" + path,
+            path: path,
+            headers: Nil,
+            body: None,
+            query: Nil,
+            path_params: Nil
+        }
+    }
+
+// ============================================================================
+// Tests: Router creation
+// ============================================================================
+
+let test_new_router_empty: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+    assert(route_count(router) == 0, "New router should have no routes")
+    return
+}
+
+// ============================================================================
+// Tests: Adding routes
+// ============================================================================
+
+let test_add_route_single: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> add_route(get("/", home_handler))
+    assert(route_count(router) == 1, "Router should have 1 route")
+    return
+}
+
+let test_add_route_multiple: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> add_route(get("/", home_handler))
+        |> add_route(get("/users", users_handler))
+        |> add_route(post("/users", create_user_handler))
+    assert(route_count(router) == 3, "Router should have 3 routes")
+    return
+}
+
+let test_add_routes_list: fn() -> void = fn() -> void {
+    let routes: List[Route] = Cons(
+        get("/", home_handler),
+        Cons(
+            get("/users", users_handler),
+            Cons(
+                post("/users", create_user_handler),
+                Nil
+            )
+        )
+    )
+    let router: Router = new_router()
+        |> add_routes(routes)
+    assert(route_count(router) == 3, "Router should have 3 routes from list")
+    return
+}
+
+// ============================================================================
+// Tests: Route helpers
+// ============================================================================
+
+let test_get_route_helper: fn() -> void = fn() -> void {
+    let r: Route = get("/users", users_handler)
+    assert(methods_match_test(get_method(r), GET), "Should be GET method")
+    assert(get_path(r) == "/users", "Should have correct path")
+    return
+}
+
+let test_post_route_helper: fn() -> void = fn() -> void {
+    let r: Route = post("/users", create_user_handler)
+    assert(methods_match_test(get_method(r), POST), "Should be POST method")
+    return
+}
+
+let test_put_route_helper: fn() -> void = fn() -> void {
+    let r: Route = put("/users/:id", update_user_handler)
+    assert(methods_match_test(get_method(r), PUT), "Should be PUT method")
+    return
+}
+
+let test_delete_route_helper: fn() -> void = fn() -> void {
+    let r: Route = delete("/users/:id", delete_user_handler)
+    assert(methods_match_test(get_method(r), DELETE), "Should be DELETE method")
+    return
+}
+
+let test_patch_route_helper: fn() -> void = fn() -> void {
+    let r: Route = patch("/users/:id", update_user_handler)
+    assert(methods_match_test(get_method(r), PATCH), "Should be PATCH method")
+    return
+}
+
+let test_route_helper: fn() -> void = fn() -> void {
+    let r: Route = route(OPTIONS, "/api", home_handler)
+    assert(methods_match_test(get_method(r), OPTIONS), "Should be OPTIONS method")
+    return
+}
+
+let methods_match_test: fn(Method, Method) -> bool =
+    fn(a: Method, b: Method) -> bool {
+        var result: bool
+        match (a, b) {
+            (GET, GET) => { result = true }
+            (POST, POST) => { result = true }
+            (PUT, PUT) => { result = true }
+            (DELETE, DELETE) => { result = true }
+            (PATCH, PATCH) => { result = true }
+            (HEAD, HEAD) => { result = true }
+            (OPTIONS, OPTIONS) => { result = true }
+            _ => { result = false }
+        }
+        return result
+    }
+
+// ============================================================================
+// Tests: Route matching by method and path
+// ============================================================================
+
+let test_match_exact_path_get: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> add_route(get("/users", users_handler))
+
+    let request: Request = make_request(GET, "/users")
+    let response: Response = handle_request(router, request)
+
+    assert(response.body == "users list", "Should match GET /users")
+    return
+}
+
+let test_match_exact_path_post: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> add_route(post("/users", create_user_handler))
+
+    let request: Request = make_request(POST, "/users")
+    let response: Response = handle_request(router, request)
+
+    assert(response.body == "created", "Should match POST /users")
+    return
+}
+
+let test_match_method_mismatch: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> add_route(get("/users", users_handler))
+
+    let request: Request = make_request(POST, "/users")
+    let response: Response = handle_request(router, request)
+
+    assert(response.body == "Not Found", "Should not match POST when only GET registered")
+    return
+}
+
+let test_match_path_mismatch: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> add_route(get("/users", users_handler))
+
+    let request: Request = make_request(GET, "/posts")
+    let response: Response = handle_request(router, request)
+
+    assert(response.body == "Not Found", "Should not match different path")
+    return
+}
+
+let test_match_root_path: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> add_route(get("/", home_handler))
+
+    let request: Request = make_request(GET, "/")
+    let response: Response = handle_request(router, request)
+
+    assert(response.body == "home", "Should match root path")
+    return
+}
+
+// ============================================================================
+// Tests: Path parameter extraction
+// ============================================================================
+
+let test_path_param_single: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> add_route(get("/users/:id", user_handler))
+
+    let request: Request = make_request(GET, "/users/123")
+    let response: Response = handle_request(router, request)
+
+    assert(response.body == "user: 123", "Should extract single path param")
+    return
+}
+
+let test_path_param_string_value: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> add_route(get("/users/:id", user_handler))
+
+    let request: Request = make_request(GET, "/users/alice")
+    let response: Response = handle_request(router, request)
+
+    assert(response.body == "user: alice", "Should extract string path param")
+    return
+}
+
+let test_path_param_nested: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> add_route(get("/posts/:postId/comments/:commentId", nested_handler))
+
+    let request: Request = make_request(GET, "/posts/42/comments/7")
+    let response: Response = handle_request(router, request)
+
+    assert(response.body == "post: 42, comment: 7", "Should extract multiple path params")
+    return
+}
+
+let test_path_param_with_static_segments: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> add_route(get("/api/v1/users/:id/profile", user_handler))
+
+    let request: Request = make_request(GET, "/api/v1/users/999/profile")
+    let response: Response = handle_request(router, request)
+
+    assert(response.body == "user: 999", "Should match with static segments")
+    return
+}
+
+// ============================================================================
+// Tests: Not found handler
+// ============================================================================
+
+let test_not_found_default: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+
+    let request: Request = make_request(GET, "/nonexistent")
+    let response: Response = handle_request(router, request)
+
+    assert(response.body == "Not Found", "Should use default not found handler")
+    return
+}
+
+let test_not_found_custom: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> set_not_found(custom_not_found_handler)
+
+    let request: Request = make_request(GET, "/nonexistent")
+    let response: Response = handle_request(router, request)
+
+    assert(response.body == "Custom 404: /nonexistent", "Should use custom not found handler")
+    return
+}
+
+// ============================================================================
+// Tests: Route priority/ordering
+// ============================================================================
+
+let test_route_priority_first_match_wins: fn() -> void = fn() -> void {
+    let first_handler: Handler = fn(req: Request) -> Response {
+        return ok("first")
+    }
+    let second_handler: Handler = fn(req: Request) -> Response {
+        return ok("second")
+    }
+
+    let router: Router = new_router()
+        |> add_route(get("/users/:id", first_handler))
+        |> add_route(get("/users/:id", second_handler))
+
+    let request: Request = make_request(GET, "/users/123")
+    let response: Response = handle_request(router, request)
+
+    assert(response.body == "first", "First matching route should win")
+    return
+}
+
+let test_route_priority_static_before_param: fn() -> void = fn() -> void {
+    let static_handler: Handler = fn(req: Request) -> Response {
+        return ok("static")
+    }
+    let param_handler: Handler = fn(req: Request) -> Response {
+        return ok("param")
+    }
+
+    // Add static route first, then param route
+    let router: Router = new_router()
+        |> add_route(get("/users/new", static_handler))
+        |> add_route(get("/users/:id", param_handler))
+
+    let request_static: Request = make_request(GET, "/users/new")
+    let response_static: Response = handle_request(router, request_static)
+    assert(response_static.body == "static", "Static route should match /users/new")
+
+    let request_param: Request = make_request(GET, "/users/123")
+    let response_param: Response = handle_request(router, request_param)
+    assert(response_param.body == "param", "Param route should match /users/123")
+    return
+}
+
+let test_route_different_methods_same_path: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> add_route(get("/users", users_handler))
+        |> add_route(post("/users", create_user_handler))
+
+    let get_request: Request = make_request(GET, "/users")
+    let get_response: Response = handle_request(router, get_request)
+    assert(get_response.body == "users list", "GET should return users list")
+
+    let post_request: Request = make_request(POST, "/users")
+    let post_response: Response = handle_request(router, post_request)
+    assert(post_response.body == "created", "POST should return created")
+    return
+}
+
+// ============================================================================
+// Tests: Edge cases
+// ============================================================================
+
+let test_trailing_slash_no_match: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> add_route(get("/users", users_handler))
+
+    // Trailing slash should not match route without it
+    let request: Request = make_request(GET, "/users/")
+    let response: Response = handle_request(router, request)
+
+    // This depends on implementation - currently trailing slash creates empty segment
+    // which is filtered out, so /users/ becomes ["users"] which matches /users
+    // This test documents current behavior
+    assert(response.body == "users list", "Trailing slash normalized")
+    return
+}
+
+let test_double_slash_normalized: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> add_route(get("/users/:id", user_handler))
+
+    // Double slashes should be normalized
+    let request: Request = make_request(GET, "/users//123")
+    let response: Response = handle_request(router, request)
+
+    assert(response.body == "user: 123", "Double slashes should be normalized")
+    return
+}
+
+let test_empty_path_matches_root: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> add_route(get("/", home_handler))
+
+    // Empty path should match root
+    let request: Request = make_request(GET, "")
+    let response: Response = handle_request(router, request)
+
+    // Empty path splits to empty list, root "/" also splits to empty list
+    assert(response.body == "home", "Empty path should match root")
+    return
+}

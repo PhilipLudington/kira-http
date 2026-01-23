@@ -109,21 +109,21 @@ Effectful client functions for making HTTP requests.
 Router and route matching for server-side handling.
 
 ### 5.1 Create `src/router.ki`
-- [ ] Define `Handler` type alias `fn(Request) -> Response`
-- [ ] Define `Route` sum type
-- [ ] Define `Router` product type
-- [ ] Implement `newRouter() -> Router`
-- [ ] Implement `addRoute(router: Router, route: Route) -> Router`
-- [ ] Implement `addRoutes(router: Router, routes: List[Route]) -> Router`
-- [ ] Implement `setNotFound(router: Router, handler: Handler) -> Router`
-- [ ] Implement route helpers: `get`, `post`, `put`, `delete`, `route`
-- [ ] Implement path parameter matching (`:param` syntax)
+- [x] Define `Handler` type alias `fn(Request) -> Response`
+- [x] Define `Route` sum type
+- [x] Define `Router` product type
+- [x] Implement `newRouter() -> Router`
+- [x] Implement `addRoute(router: Router, route: Route) -> Router`
+- [x] Implement `addRoutes(router: Router, routes: List[Route]) -> Router`
+- [x] Implement `setNotFound(router: Router, handler: Handler) -> Router`
+- [x] Implement route helpers: `get`, `post`, `put`, `delete`, `route`
+- [x] Implement path parameter matching (`:param` syntax)
 
 ### 5.2 Create `tests/test_router.ki`
-- [ ] Test route matching by method and path
-- [ ] Test path parameter extraction
-- [ ] Test not found handler
-- [ ] Test route priority/ordering
+- [x] Test route matching by method and path
+- [x] Test path parameter extraction
+- [x] Test not found handler
+- [x] Test route priority/ordering
 
 ## Phase 6: Middleware
 

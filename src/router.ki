@@ -1,0 +1,506 @@
+/// Router and route matching for kira-http
+///
+/// This module provides routing functionality for HTTP servers, including
+/// route definition, path parameter extraction, and request matching.
+
+module http.router
+
+use http.types.Method
+use http.types.QueryParam
+use http.request.Request
+use http.request.with_path_params
+use http.response.Response
+use http.response.not_found
+
+/// A request handler function
+///
+/// Handlers receive a Request and return a Response.
+pub type Handler = fn(Request) -> Response
+
+/// A route definition
+///
+/// Associates an HTTP method and path pattern with a handler.
+/// Path patterns can include parameters with `:param` syntax.
+pub type Route =
+    | Route(Method, string, Handler)
+
+/// A router that matches requests to handlers
+///
+/// The router maintains a list of routes and a fallback handler
+/// for unmatched requests.
+pub type Router = {
+    routes: List[Route],
+    not_found_handler: Handler
+}
+
+/// Creates a new router with default settings
+///
+/// The default not-found handler returns a 404 response.
+///
+/// # Returns
+/// A new Router with no routes configured
+///
+/// # Example
+/// ```
+/// let router: Router = new_router()
+/// ```
+pub let new_router: fn() -> Router = fn() -> Router {
+    return Router {
+        routes: Nil,
+        not_found_handler: default_not_found_handler
+    }
+}
+
+let default_not_found_handler: Handler = fn(req: Request) -> Response {
+    return not_found()
+}
+
+/// Adds a route to the router
+///
+/// Routes are matched in the order they are added, so more specific
+/// routes should be added before more general ones.
+///
+/// # Arguments
+/// * `router` - The router to modify
+/// * `route` - The route to add
+///
+/// # Returns
+/// A new Router with the route added
+///
+/// # Example
+/// ```
+/// let router: Router = new_router()
+///     |> add_route(get("/", home_handler))
+/// ```
+pub let add_route: fn(Router, Route) -> Router =
+    fn(router: Router, route: Route) -> Router {
+        return Router {
+            routes: append_route(router.routes, route),
+            not_found_handler: router.not_found_handler
+        }
+    }
+
+let append_route: fn(List[Route], Route) -> List[Route] =
+    fn(routes: List[Route], route: Route) -> List[Route] {
+        var result: List[Route]
+        match routes {
+            Nil => { result = Cons(route, Nil) }
+            Cons(head, tail) => { result = Cons(head, append_route(tail, route)) }
+        }
+        return result
+    }
+
+/// Adds multiple routes to the router
+///
+/// Routes are added in order and matched in the order they appear.
+///
+/// # Arguments
+/// * `router` - The router to modify
+/// * `routes` - The list of routes to add
+///
+/// # Returns
+/// A new Router with all routes added
+///
+/// # Example
+/// ```
+/// let router: Router = new_router()
+///     |> add_routes([
+///         get("/", home_handler),
+///         get("/users", users_handler),
+///         post("/users", create_user_handler)
+///     ])
+/// ```
+pub let add_routes: fn(Router, List[Route]) -> Router =
+    fn(router: Router, routes: List[Route]) -> Router {
+        var result: Router
+        match routes {
+            Nil => { result = router }
+            Cons(route, rest) => {
+                let updated: Router = add_route(router, route)
+                result = add_routes(updated, rest)
+            }
+        }
+        return result
+    }
+
+/// Sets the not-found handler for unmatched requests
+///
+/// # Arguments
+/// * `router` - The router to modify
+/// * `handler` - The handler for unmatched requests
+///
+/// # Returns
+/// A new Router with the not-found handler set
+///
+/// # Example
+/// ```
+/// let router: Router = new_router()
+///     |> set_not_found(custom_404_handler)
+/// ```
+pub let set_not_found: fn(Router, Handler) -> Router =
+    fn(router: Router, handler: Handler) -> Router {
+        return Router {
+            routes: router.routes,
+            not_found_handler: handler
+        }
+    }
+
+/// Creates a GET route
+///
+/// # Arguments
+/// * `path` - The path pattern (can include `:param` segments)
+/// * `handler` - The handler for this route
+///
+/// # Returns
+/// A Route for GET requests to the given path
+///
+/// # Example
+/// ```
+/// let route: Route = get("/users/:id", get_user_handler)
+/// ```
+pub let get: fn(string, Handler) -> Route =
+    fn(path: string, handler: Handler) -> Route {
+        return Route(GET, path, handler)
+    }
+
+/// Creates a POST route
+///
+/// # Arguments
+/// * `path` - The path pattern (can include `:param` segments)
+/// * `handler` - The handler for this route
+///
+/// # Returns
+/// A Route for POST requests to the given path
+///
+/// # Example
+/// ```
+/// let route: Route = post("/users", create_user_handler)
+/// ```
+pub let post: fn(string, Handler) -> Route =
+    fn(path: string, handler: Handler) -> Route {
+        return Route(POST, path, handler)
+    }
+
+/// Creates a PUT route
+///
+/// # Arguments
+/// * `path` - The path pattern (can include `:param` segments)
+/// * `handler` - The handler for this route
+///
+/// # Returns
+/// A Route for PUT requests to the given path
+///
+/// # Example
+/// ```
+/// let route: Route = put("/users/:id", update_user_handler)
+/// ```
+pub let put: fn(string, Handler) -> Route =
+    fn(path: string, handler: Handler) -> Route {
+        return Route(PUT, path, handler)
+    }
+
+/// Creates a DELETE route
+///
+/// # Arguments
+/// * `path` - The path pattern (can include `:param` segments)
+/// * `handler` - The handler for this route
+///
+/// # Returns
+/// A Route for DELETE requests to the given path
+///
+/// # Example
+/// ```
+/// let route: Route = delete("/users/:id", delete_user_handler)
+/// ```
+pub let delete: fn(string, Handler) -> Route =
+    fn(path: string, handler: Handler) -> Route {
+        return Route(DELETE, path, handler)
+    }
+
+/// Creates a PATCH route
+///
+/// # Arguments
+/// * `path` - The path pattern (can include `:param` segments)
+/// * `handler` - The handler for this route
+///
+/// # Returns
+/// A Route for PATCH requests to the given path
+pub let patch: fn(string, Handler) -> Route =
+    fn(path: string, handler: Handler) -> Route {
+        return Route(PATCH, path, handler)
+    }
+
+/// Creates a HEAD route
+///
+/// # Arguments
+/// * `path` - The path pattern (can include `:param` segments)
+/// * `handler` - The handler for this route
+///
+/// # Returns
+/// A Route for HEAD requests to the given path
+pub let head: fn(string, Handler) -> Route =
+    fn(path: string, handler: Handler) -> Route {
+        return Route(HEAD, path, handler)
+    }
+
+/// Creates a route with any HTTP method
+///
+/// # Arguments
+/// * `method` - The HTTP method
+/// * `path` - The path pattern (can include `:param` segments)
+/// * `handler` - The handler for this route
+///
+/// # Returns
+/// A Route for the specified method and path
+///
+/// # Example
+/// ```
+/// let route: Route = route(OPTIONS, "/api", options_handler)
+/// ```
+pub let route: fn(Method, string, Handler) -> Route =
+    fn(method: Method, path: string, handler: Handler) -> Route {
+        return Route(method, path, handler)
+    }
+
+/// Matches a request against the router and returns a response
+///
+/// Iterates through routes in order, returning the response from
+/// the first matching handler. If no route matches, the not-found
+/// handler is called.
+///
+/// # Arguments
+/// * `router` - The router to match against
+/// * `request` - The request to match
+///
+/// # Returns
+/// A Response from the matched handler or not-found handler
+///
+/// # Example
+/// ```
+/// let response: Response = handle_request(router, request)
+/// ```
+pub let handle_request: fn(Router, Request) -> Response =
+    fn(router: Router, request: Request) -> Response {
+        let match_result: Option[MatchResult] = find_matching_route(router.routes, request)
+        var response: Response
+        match match_result {
+            Some(result) => {
+                let updated_request: Request = with_path_params(request, result.params)
+                response = result.handler(updated_request)
+            }
+            None => {
+                response = router.not_found_handler(request)
+            }
+        }
+        return response
+    }
+
+type MatchResult = {
+    handler: Handler,
+    params: List[QueryParam]
+}
+
+let find_matching_route: fn(List[Route], Request) -> Option[MatchResult] =
+    fn(routes: List[Route], request: Request) -> Option[MatchResult] {
+        var result: Option[MatchResult]
+        match routes {
+            Nil => { result = None }
+            Cons(route_item, rest) => {
+                match route_item {
+                    Route(method, pattern, handler) => {
+                        if methods_match(method, request.method) {
+                            let match_params: Option[List[QueryParam]] = match_path(pattern, request.path)
+                            match match_params {
+                                Some(params) => {
+                                    result = Some(MatchResult {
+                                        handler: handler,
+                                        params: params
+                                    })
+                                }
+                                None => {
+                                    result = find_matching_route(rest, request)
+                                }
+                            }
+                        } else {
+                            result = find_matching_route(rest, request)
+                        }
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+let methods_match: fn(Method, Method) -> bool =
+    fn(pattern_method: Method, request_method: Method) -> bool {
+        var result: bool
+        match (pattern_method, request_method) {
+            (GET, GET) => { result = true }
+            (POST, POST) => { result = true }
+            (PUT, PUT) => { result = true }
+            (DELETE, DELETE) => { result = true }
+            (PATCH, PATCH) => { result = true }
+            (HEAD, HEAD) => { result = true }
+            (OPTIONS, OPTIONS) => { result = true }
+            _ => { result = false }
+        }
+        return result
+    }
+
+/// Matches a path pattern against a request path
+///
+/// Supports static segments and parameter segments (prefixed with ':').
+/// Returns the extracted parameters if the path matches.
+///
+/// # Arguments
+/// * `pattern` - The route pattern (e.g., "/users/:id")
+/// * `path` - The actual request path (e.g., "/users/123")
+///
+/// # Returns
+/// Some(params) if the path matches, None otherwise
+let match_path: fn(string, string) -> Option[List[QueryParam]] =
+    fn(pattern: string, path: string) -> Option[List[QueryParam]] {
+        let pattern_segments: List[string] = split_path(pattern)
+        let path_segments: List[string] = split_path(path)
+        return match_segments(pattern_segments, path_segments, Nil)
+    }
+
+let match_segments: fn(List[string], List[string], List[QueryParam]) -> Option[List[QueryParam]] =
+    fn(pattern_segs: List[string], path_segs: List[string], params: List[QueryParam]) -> Option[List[QueryParam]] {
+        var result: Option[List[QueryParam]]
+        match (pattern_segs, path_segs) {
+            (Nil, Nil) => {
+                // Both exhausted - match successful
+                result = Some(params)
+            }
+            (Nil, Cons(_, _)) => {
+                // Pattern exhausted but path has more - no match
+                result = None
+            }
+            (Cons(_, _), Nil) => {
+                // Path exhausted but pattern has more - no match
+                result = None
+            }
+            (Cons(pattern_seg, pattern_rest), Cons(path_seg, path_rest)) => {
+                if is_param_segment(pattern_seg) {
+                    // Parameter segment - extract value
+                    let param_name: string = std.string.substring(pattern_seg, 1, std.string.length(pattern_seg))
+                    let param: QueryParam = QueryParam { key: param_name, value: path_seg }
+                    let new_params: List[QueryParam] = Cons(param, params)
+                    result = match_segments(pattern_rest, path_rest, new_params)
+                } else if pattern_seg == path_seg {
+                    // Static segment - must match exactly
+                    result = match_segments(pattern_rest, path_rest, params)
+                } else {
+                    // Segments don't match
+                    result = None
+                }
+            }
+        }
+        return result
+    }
+
+let is_param_segment: fn(string) -> bool =
+    fn(segment: string) -> bool {
+        if std.string.length(segment) > 0 {
+            return std.string.starts_with(segment, ":")
+        } else {
+            return false
+        }
+    }
+
+/// Splits a path into segments
+///
+/// Removes empty segments (from leading/trailing slashes or double slashes).
+let split_path: fn(string) -> List[string] =
+    fn(path: string) -> List[string] {
+        let parts: List[string] = std.string.split(path, "/")
+        return filter_empty(parts)
+    }
+
+let filter_empty: fn(List[string]) -> List[string] =
+    fn(strings: List[string]) -> List[string] {
+        var result: List[string]
+        match strings {
+            Nil => { result = Nil }
+            Cons(s, rest) => {
+                let filtered_rest: List[string] = filter_empty(rest)
+                if std.string.length(s) > 0 {
+                    result = Cons(s, filtered_rest)
+                } else {
+                    result = filtered_rest
+                }
+            }
+        }
+        return result
+    }
+
+/// Gets the handler for a route
+///
+/// # Arguments
+/// * `route` - The route to inspect
+///
+/// # Returns
+/// The handler function for this route
+pub let get_handler: fn(Route) -> Handler =
+    fn(route_item: Route) -> Handler {
+        var handler: Handler
+        match route_item {
+            Route(_, _, h) => { handler = h }
+        }
+        return handler
+    }
+
+/// Gets the method for a route
+///
+/// # Arguments
+/// * `route` - The route to inspect
+///
+/// # Returns
+/// The HTTP method for this route
+pub let get_method: fn(Route) -> Method =
+    fn(route_item: Route) -> Method {
+        var method: Method
+        match route_item {
+            Route(m, _, _) => { method = m }
+        }
+        return method
+    }
+
+/// Gets the path pattern for a route
+///
+/// # Arguments
+/// * `route` - The route to inspect
+///
+/// # Returns
+/// The path pattern for this route
+pub let get_path: fn(Route) -> string =
+    fn(route_item: Route) -> string {
+        var path: string
+        match route_item {
+            Route(_, p, _) => { path = p }
+        }
+        return path
+    }
+
+/// Returns the number of routes in a router
+///
+/// # Arguments
+/// * `router` - The router to inspect
+///
+/// # Returns
+/// The number of routes registered
+pub let route_count: fn(Router) -> i32 =
+    fn(router: Router) -> i32 {
+        return count_routes(router.routes)
+    }
+
+let count_routes: fn(List[Route]) -> i32 =
+    fn(routes: List[Route]) -> i32 {
+        var count: i32
+        match routes {
+            Nil => { count = 0 }
+            Cons(_, rest) => { count = 1 + count_routes(rest) }
+        }
+        return count
+    }
