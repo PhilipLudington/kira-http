@@ -1,0 +1,388 @@
+/// kira-http - HTTP client/server library for Kira
+///
+/// This library provides HTTP client and server functionality with explicit
+/// effect tracking. All network IO operations are marked as effects.
+///
+/// # Quick Start - Client
+///
+/// ```
+/// use http
+///
+/// effect fn fetch_data() -> IO[Result[Response, HttpError]] {
+///     return http.get("https://api.example.com/data")
+/// }
+/// ```
+///
+/// # Quick Start - Server
+///
+/// ```
+/// use http
+///
+/// effect fn main() -> IO[void] {
+///     let router: Router = http.new_router()
+///         |> http.add_route(http.get("/", home_handler))
+///         |> http.add_route(http.get("/users/:id", get_user))
+///     http.serve(8080, router)
+///     return
+/// }
+/// ```
+
+module http
+
+// ============================================================================
+// Core Types (from types.ki)
+// ============================================================================
+
+/// HTTP request methods
+pub use http.types.Method
+
+/// HTTP response status codes
+pub use http.types.Status
+
+/// A single HTTP header as a name-value pair
+pub use http.types.Header
+
+/// A collection of HTTP headers
+pub use http.types.Headers
+
+/// Errors that can occur during HTTP operations
+pub use http.types.HttpError
+
+/// A key-value pair for query parameters
+pub use http.types.QueryParam
+
+// ============================================================================
+// Status Utilities (from status.ki)
+// ============================================================================
+
+/// Converts a Status to its numeric HTTP status code
+pub use http.status.status_code
+
+/// Converts a numeric HTTP status code to a Status
+pub use http.status.status_from_code
+
+/// Checks if a status indicates success (2xx)
+pub use http.status.is_success
+
+/// Checks if a status indicates a redirect (3xx)
+pub use http.status.is_redirect
+
+/// Checks if a status indicates a client error (4xx)
+pub use http.status.is_client_error
+
+/// Checks if a status indicates a server error (5xx)
+pub use http.status.is_server_error
+
+// ============================================================================
+// Header Utilities (from headers.ki)
+// ============================================================================
+
+/// Gets the value of a header by name (case-insensitive)
+pub use http.headers.get_header
+
+/// Sets a header value, replacing any existing header with the same name
+pub use http.headers.set_header
+
+/// Removes all headers with the given name (case-insensitive)
+pub use http.headers.remove_header
+
+/// Creates a Content-Type header
+pub use http.headers.content_type
+
+/// Creates an Authorization header
+pub use http.headers.authorization
+
+/// Creates an Accept header
+pub use http.headers.accept
+
+/// Pre-defined Content-Type header for JSON
+pub use http.headers.CONTENT_TYPE_JSON
+
+/// Pre-defined Content-Type header for HTML
+pub use http.headers.CONTENT_TYPE_HTML
+
+/// Pre-defined Content-Type header for plain text
+pub use http.headers.CONTENT_TYPE_TEXT
+
+// ============================================================================
+// URL Utilities (from url.ki)
+// ============================================================================
+
+/// A parsed URL with its component parts
+pub use http.url.Url
+
+/// Parses a URL string into its component parts
+pub use http.url.parse_url
+
+/// Builds a URL string from its component parts
+pub use http.url.build_url
+
+/// Parses a query string into a list of key-value pairs
+pub use http.url.parse_query_string
+
+/// Gets a single query parameter value by name
+pub use http.url.get_query_param
+
+/// Gets all values for a query parameter by name (for repeated parameters)
+pub use http.url.get_query_params
+
+/// Extracts a path parameter from a matched route
+pub use http.url.extract_path_param
+
+/// Checks if a path matches a route pattern
+pub use http.url.path_matches
+
+// ============================================================================
+// Request Types and Builder (from request.ki)
+// ============================================================================
+
+/// An HTTP request
+pub use http.request.Request
+
+/// A builder for constructing HTTP requests
+pub use http.request.RequestBuilder
+
+/// Creates a new request builder with the given method and URL
+pub use http.request.new_request
+
+/// Adds a header to the request builder
+pub use http.request.with_header
+
+/// Adds multiple headers to the request builder
+pub use http.request.with_headers
+
+/// Sets the body of the request
+pub use http.request.with_body
+
+/// Sets the body as JSON and adds the Content-Type header
+pub use http.request.with_json
+
+/// Sets the timeout for the request in milliseconds
+pub use http.request.with_timeout
+
+/// Builds a Request from the RequestBuilder
+pub use http.request.build
+
+/// Gets a query parameter value from a request by name
+pub use http.request.get_query_param as request_query_param
+
+/// Gets all values for a query parameter by name (for repeated parameters)
+pub use http.request.get_query_params as request_query_params
+
+/// Gets a path parameter value from a request by name
+pub use http.request.path_param
+
+/// Sets path parameters on a request
+pub use http.request.with_path_params
+
+// ============================================================================
+// Response Types and Helpers (from response.ki)
+// ============================================================================
+
+/// An HTTP response
+pub use http.response.Response
+
+/// Creates a 200 OK response with the given body
+pub use http.response.ok
+
+/// Creates a 201 Created response with the given body
+pub use http.response.created
+
+/// Creates a 204 No Content response
+pub use http.response.no_content
+
+/// Creates a 400 Bad Request response with the given message
+pub use http.response.bad_request
+
+/// Creates a 401 Unauthorized response
+pub use http.response.unauthorized
+
+/// Creates a 403 Forbidden response
+pub use http.response.forbidden
+
+/// Creates a 404 Not Found response
+pub use http.response.not_found
+
+/// Creates a 405 Method Not Allowed response
+pub use http.response.method_not_allowed
+
+/// Creates a 409 Conflict response
+pub use http.response.conflict
+
+/// Creates a 500 Internal Server Error response
+pub use http.response.internal_error
+
+/// Creates a 503 Service Unavailable response
+pub use http.response.service_unavailable
+
+/// Creates a JSON response with the given status and body
+pub use http.response.json_response
+
+/// Creates a JSON 200 OK response
+pub use http.response.json_ok
+
+/// Creates a JSON 201 Created response
+pub use http.response.json_created
+
+/// Creates a redirect response (302 Found)
+pub use http.response.redirect
+
+/// Creates a permanent redirect response (301 Moved Permanently)
+pub use http.response.permanent_redirect
+
+/// Adds a header to a response
+pub use http.response.with_header as response_with_header
+
+/// Sets the body of a response
+pub use http.response.with_body as response_with_body
+
+/// Sets the status of a response
+pub use http.response.with_status
+
+// ============================================================================
+// HTTP Client (from client.ki)
+// ============================================================================
+
+/// Performs a GET request to the given URL
+pub use http.client.get
+
+/// Performs a POST request to the given URL with a body
+pub use http.client.post
+
+/// Performs a PUT request to the given URL with a body
+pub use http.client.put
+
+/// Performs a PATCH request to the given URL with a body
+pub use http.client.patch
+
+/// Performs a DELETE request to the given URL
+pub use http.client.delete
+
+/// Performs a HEAD request to the given URL
+pub use http.client.head
+
+/// Performs an OPTIONS request to the given URL
+pub use http.client.options
+
+/// Performs an HTTP request using a Request object
+pub use http.client.request
+
+/// Sends an HTTP request using a RequestBuilder
+pub use http.client.send
+
+/// Performs a POST request with JSON content
+pub use http.client.post_json
+
+/// Performs a PUT request with JSON content
+pub use http.client.put_json
+
+/// Performs a PATCH request with JSON content
+pub use http.client.patch_json
+
+// ============================================================================
+// Router (from router.ki)
+// ============================================================================
+
+/// A request handler function
+pub use http.router.Handler
+
+/// A route definition
+pub use http.router.Route
+
+/// A router that matches requests to handlers
+pub use http.router.Router
+
+/// Creates a new router with default settings
+pub use http.router.new_router
+
+/// Adds a route to the router
+pub use http.router.add_route
+
+/// Adds multiple routes to the router
+pub use http.router.add_routes
+
+/// Sets the not-found handler for unmatched requests
+pub use http.router.set_not_found
+
+/// Adds middleware to the router
+pub use http.router.use_middleware
+
+/// Creates a GET route
+pub use http.router.get as route_get
+
+/// Creates a POST route
+pub use http.router.post as route_post
+
+/// Creates a PUT route
+pub use http.router.put as route_put
+
+/// Creates a DELETE route
+pub use http.router.delete as route_delete
+
+/// Creates a PATCH route
+pub use http.router.patch as route_patch
+
+/// Creates a HEAD route
+pub use http.router.head as route_head
+
+/// Creates a route with any HTTP method
+pub use http.router.route
+
+/// Matches a request against the router and returns a response
+pub use http.router.handle_request
+
+/// Gets the handler for a route
+pub use http.router.get_handler
+
+/// Gets the method for a route
+pub use http.router.get_method
+
+/// Gets the path pattern for a route
+pub use http.router.get_path
+
+/// Returns the number of routes in a router
+pub use http.router.route_count
+
+// ============================================================================
+// Middleware (from middleware.ki)
+// ============================================================================
+
+/// A middleware function that wraps a handler
+pub use http.middleware.Middleware
+
+/// Creates a logging middleware
+pub use http.middleware.logging
+
+/// Creates a CORS middleware
+pub use http.middleware.cors
+
+/// Creates a timeout middleware
+pub use http.middleware.timeout
+
+/// Composes two middleware functions
+pub use http.middleware.compose
+
+/// Composes a list of middleware into a single middleware
+pub use http.middleware.compose_all
+
+/// Applies middleware to a handler
+pub use http.middleware.apply_middleware
+
+/// Applies a list of middleware to a handler
+pub use http.middleware.apply_all_middleware
+
+// ============================================================================
+// HTTP Server (from server.ki)
+// ============================================================================
+
+/// Starts an HTTP server on the specified port with the given router
+pub use http.server.serve
+
+/// Starts an HTTP server with a list of routes
+pub use http.server.serve_routes
+
+/// Parses a raw HTTP request string into a Request
+pub use http.server.parse_http_request
+
+/// Serializes a Response to a raw HTTP response string
+pub use http.server.serialize_http_response

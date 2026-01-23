@@ -1,0 +1,519 @@
+/// HTTP server for kira-http
+///
+/// This module provides an effectful HTTP server that listens for requests
+/// and routes them through a configured router. All server operations are
+/// explicitly marked as effects since they perform network IO.
+
+module http.server
+
+use http.types.Method
+use http.types.Status
+use http.types.Header
+use http.types.Headers
+use http.types.HttpError
+use http.types.QueryParam
+use http.request.Request
+use http.response.Response
+use http.router.Router
+use http.router.Route
+use http.router.new_router
+use http.router.add_routes
+use http.router.handle_request
+use http.status.status_code
+use http.url.parse_query_string
+
+/// Starts an HTTP server on the specified port with the given router
+///
+/// This function listens for incoming HTTP connections, parses requests,
+/// routes them through the provided router, and sends responses.
+/// The server runs indefinitely until an error occurs or it is shut down.
+///
+/// # Arguments
+/// * `port` - The port number to listen on (e.g., 8080)
+/// * `router` - The router configuration with routes and middleware
+///
+/// # Returns
+/// Result[void, HttpError] - Ok(void) if the server shuts down gracefully,
+/// or Err(HttpError) if an error occurs during startup or operation
+///
+/// # Example
+/// ```
+/// effect fn main() -> IO[void] {
+///     let router: Router = new_router()
+///         |> add_route(get("/", home_handler))
+///     serve(8080, router)
+///     return
+/// }
+/// ```
+pub effect fn serve(port: i32, router: Router) -> Result[void, HttpError] {
+    // Validate port range
+    if port < 1 or port > 65535 {
+        return Err(InvalidUrl("Port must be between 1 and 65535"))
+    }
+
+    // Start listening on the specified port
+    let listener_result: Result[TcpListener, string] = std.net.tcp_listen(port)
+
+    var listener: TcpListener
+    match listener_result {
+        Ok(l) => { listener = l }
+        Err(e) => { return Err(ConnectionFailed(e)) }
+    }
+
+    std.io.println("Server listening on port " + std.string.from_int(port))
+
+    // Accept and handle connections in a loop
+    loop {
+        let conn_result: Result[TcpConnection, string] = std.net.accept(listener)
+
+        match conn_result {
+            Ok(conn) => {
+                let handle_result: Result[void, HttpError] = handle_connection(conn, router)
+                match handle_result {
+                    Ok(_) => { }
+                    Err(e) => {
+                        // Log error but continue accepting connections
+                        std.io.eprintln("Error handling connection: " + http_error_to_string(e))
+                    }
+                }
+            }
+            Err(e) => {
+                // Log error but continue accepting connections
+                std.io.eprintln("Error accepting connection: " + e)
+            }
+        }
+    }
+
+    return Ok(void)
+}
+
+/// Starts an HTTP server with a list of routes
+///
+/// This is a convenience function that creates a router from routes
+/// and starts the server.
+///
+/// # Arguments
+/// * `port` - The port number to listen on
+/// * `routes` - The list of routes to handle
+///
+/// # Returns
+/// Result[void, HttpError] - Ok(void) if the server shuts down gracefully,
+/// or Err(HttpError) if an error occurs
+///
+/// # Example
+/// ```
+/// effect fn main() -> IO[void] {
+///     serve_routes(8080, Cons(get("/", home_handler), Nil))
+///     return
+/// }
+/// ```
+pub effect fn serve_routes(port: i32, routes: List[Route]) -> Result[void, HttpError] {
+    let router: Router = new_router()
+        |> add_routes(routes)
+    return serve(port, router)
+}
+
+/// Handles a single HTTP connection
+///
+/// Reads the request, routes it, and sends the response.
+effect fn handle_connection(conn: TcpConnection, router: Router) -> Result[void, HttpError] {
+    // Read raw HTTP request
+    let raw_request_result: Result[string, string] = std.net.read(conn)
+
+    var raw_request: string
+    match raw_request_result {
+        Ok(data) => { raw_request = data }
+        Err(e) => { return Err(InvalidResponse("Failed to read request: " + e)) }
+    }
+
+    // Parse the HTTP request
+    let request_result: Result[Request, HttpError] = parse_http_request(raw_request)
+
+    var request: Request
+    match request_result {
+        Ok(req) => { request = req }
+        Err(e) => {
+            // Send 400 Bad Request for parse errors
+            let error_response: string = serialize_http_response(Response {
+                status: BadRequest,
+                headers: Nil,
+                body: "Bad Request: " + http_error_to_string(e)
+            })
+            std.net.write(conn, error_response)?
+            std.net.close(conn)?
+            return Err(e)
+        }
+    }
+
+    // Route the request and get response
+    let response: Response = handle_request(router, request)
+
+    // Serialize and send response
+    let raw_response: string = serialize_http_response(response)
+    std.net.write(conn, raw_response)?
+
+    // Close connection (HTTP/1.0 style for simplicity)
+    std.net.close(conn)?
+
+    return Ok(void)
+}
+
+/// Parses a raw HTTP request string into a Request
+///
+/// # Arguments
+/// * `raw` - The raw HTTP request string
+///
+/// # Returns
+/// Result[Request, HttpError] - The parsed Request or an error
+///
+/// # Example
+/// ```
+/// let raw: string = "GET /path HTTP/1.1\r\nHost: example.com\r\n\r\n"
+/// let request: Result[Request, HttpError] = parse_http_request(raw)
+/// ```
+pub let parse_http_request: fn(string) -> Result[Request, HttpError] =
+    fn(raw: string) -> Result[Request, HttpError] {
+        // Split into lines
+        let lines: List[string] = split_lines(raw)
+
+        // Parse request line (first line)
+        var request_line: string
+        var header_lines: List[string]
+
+        match lines {
+            Nil => { return Err(InvalidResponse("Empty request")) }
+            Cons(first, rest) => {
+                request_line = first
+                header_lines = rest
+            }
+        }
+
+        // Parse method, path, and version from request line
+        let request_parts: List[string] = std.string.split(request_line, " ")
+
+        var method_str: string
+        var path_with_query: string
+        var version: string
+
+        match request_parts {
+            Cons(m, Cons(p, Cons(v, _))) => {
+                method_str = m
+                path_with_query = p
+                version = v
+            }
+            _ => { return Err(InvalidResponse("Invalid request line: " + request_line)) }
+        }
+
+        // Parse method
+        let method_result: Result[Method, HttpError] = parse_method(method_str)
+        var method: Method
+        match method_result {
+            Ok(m) => { method = m }
+            Err(e) => { return Err(e) }
+        }
+
+        // Split path and query string
+        let path_and_query: PathQueryResult = split_path_query(path_with_query)
+
+        // Parse headers and body
+        let headers_and_body: HeadersBodyResult = parse_headers_and_body(header_lines)
+
+        return Ok(Request {
+            method: method,
+            url: path_with_query,
+            path: path_and_query.path,
+            headers: headers_and_body.headers,
+            body: headers_and_body.body,
+            query: path_and_query.query,
+            path_params: Nil
+        })
+    }
+
+type PathQueryResult = {
+    path: string,
+    query: List[QueryParam]
+}
+
+let split_path_query: fn(string) -> PathQueryResult =
+    fn(path_with_query: string) -> PathQueryResult {
+        let query_idx: Option[i32] = std.string.index_of(path_with_query, "?")
+
+        var path: string
+        var query: List[QueryParam]
+
+        match query_idx {
+            Some(idx) => {
+                path = std.string.substring(path_with_query, 0, idx)
+                let query_string: string = std.string.substring(path_with_query, idx + 1, std.string.length(path_with_query))
+                query = parse_query_string(query_string)
+            }
+            None => {
+                path = path_with_query
+                query = Nil
+            }
+        }
+
+        return PathQueryResult {
+            path: path,
+            query: query
+        }
+    }
+
+type HeadersBodyResult = {
+    headers: Headers,
+    body: Option[string]
+}
+
+let parse_headers_and_body: fn(List[string]) -> HeadersBodyResult =
+    fn(lines: List[string]) -> HeadersBodyResult {
+        var headers: Headers = Nil
+        var body: Option[string] = None
+        var in_body: bool = false
+        var body_lines: List[string] = Nil
+
+        var current_lines: List[string] = lines
+
+        loop {
+            match current_lines {
+                Nil => { break }
+                Cons(line, rest) => {
+                    if in_body {
+                        body_lines = append_string(body_lines, line)
+                    } else if std.string.length(line) == 0 or line == "\r" {
+                        // Empty line marks start of body
+                        in_body = true
+                    } else {
+                        // Parse header
+                        let header_opt: Option[Header] = parse_header_line(line)
+                        match header_opt {
+                            Some(h) => {
+                                headers = Cons(h, headers)
+                            }
+                            None => { }
+                        }
+                    }
+                    current_lines = rest
+                }
+            }
+        }
+
+        // Join body lines
+        if list_length(body_lines) > 0 {
+            body = Some(join_strings(body_lines, "\r\n"))
+        }
+
+        return HeadersBodyResult {
+            headers: reverse_headers(headers),
+            body: body
+        }
+    }
+
+let parse_header_line: fn(string) -> Option[Header] =
+    fn(line: string) -> Option[Header] {
+        let colon_idx: Option[i32] = std.string.index_of(line, ":")
+
+        var result: Option[Header]
+
+        match colon_idx {
+            Some(idx) => {
+                let name: string = std.string.trim(std.string.substring(line, 0, idx))
+                let value: string = std.string.trim(std.string.substring(line, idx + 1, std.string.length(line)))
+                result = Some(Header { name: name, value: value })
+            }
+            None => {
+                result = None
+            }
+        }
+
+        return result
+    }
+
+let reverse_headers: fn(Headers) -> Headers =
+    fn(headers: Headers) -> Headers {
+        return reverse_headers_acc(headers, Nil)
+    }
+
+let reverse_headers_acc: fn(Headers, Headers) -> Headers =
+    fn(headers: Headers, acc: Headers) -> Headers {
+        var result: Headers
+        match headers {
+            Nil => { result = acc }
+            Cons(h, rest) => { result = reverse_headers_acc(rest, Cons(h, acc)) }
+        }
+        return result
+    }
+
+let parse_method: fn(string) -> Result[Method, HttpError] =
+    fn(method_str: string) -> Result[Method, HttpError] {
+        var result: Result[Method, HttpError]
+        match method_str {
+            "GET" => { result = Ok(GET) }
+            "POST" => { result = Ok(POST) }
+            "PUT" => { result = Ok(PUT) }
+            "DELETE" => { result = Ok(DELETE) }
+            "PATCH" => { result = Ok(PATCH) }
+            "HEAD" => { result = Ok(HEAD) }
+            "OPTIONS" => { result = Ok(OPTIONS) }
+            _ => { result = Err(InvalidResponse("Unknown method: " + method_str)) }
+        }
+        return result
+    }
+
+/// Serializes a Response to a raw HTTP response string
+///
+/// # Arguments
+/// * `response` - The Response to serialize
+///
+/// # Returns
+/// The raw HTTP response string ready to send over the network
+///
+/// # Example
+/// ```
+/// let response: Response = ok("Hello, World!")
+/// let raw: string = serialize_http_response(response)
+/// // "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nHello, World!"
+/// ```
+pub let serialize_http_response: fn(Response) -> string =
+    fn(response: Response) -> string {
+        let code: i32 = status_code(response.status)
+        let reason: string = status_reason(response.status)
+
+        // Status line
+        var result: string = "HTTP/1.1 " + std.string.from_int(code) + " " + reason + "\r\n"
+
+        // Add Content-Length header
+        let body_length: i32 = std.string.length(response.body)
+        result = result + "Content-Length: " + std.string.from_int(body_length) + "\r\n"
+
+        // Add headers
+        result = result + serialize_headers(response.headers)
+
+        // Empty line and body
+        result = result + "\r\n" + response.body
+
+        return result
+    }
+
+let serialize_headers: fn(Headers) -> string =
+    fn(headers: Headers) -> string {
+        var result: string = ""
+        var current: Headers = headers
+
+        loop {
+            match current {
+                Nil => { break }
+                Cons(header, rest) => {
+                    result = result + header.name + ": " + header.value + "\r\n"
+                    current = rest
+                }
+            }
+        }
+
+        return result
+    }
+
+let status_reason: fn(Status) -> string =
+    fn(status: Status) -> string {
+        var reason: string
+        match status {
+            OK => { reason = "OK" }
+            Created => { reason = "Created" }
+            Accepted => { reason = "Accepted" }
+            NoContent => { reason = "No Content" }
+            MovedPermanently => { reason = "Moved Permanently" }
+            Found => { reason = "Found" }
+            NotModified => { reason = "Not Modified" }
+            BadRequest => { reason = "Bad Request" }
+            Unauthorized => { reason = "Unauthorized" }
+            Forbidden => { reason = "Forbidden" }
+            NotFound => { reason = "Not Found" }
+            MethodNotAllowed => { reason = "Method Not Allowed" }
+            Conflict => { reason = "Conflict" }
+            InternalError => { reason = "Internal Server Error" }
+            NotImplemented => { reason = "Not Implemented" }
+            BadGateway => { reason = "Bad Gateway" }
+            ServiceUnavailable => { reason = "Service Unavailable" }
+            Custom(code) => { reason = "Custom" }
+        }
+        return reason
+    }
+
+let http_error_to_string: fn(HttpError) -> string =
+    fn(err: HttpError) -> string {
+        var result: string
+        match err {
+            ConnectionFailed(msg) => { result = "Connection failed: " + msg }
+            Timeout => { result = "Request timed out" }
+            InvalidUrl(msg) => { result = "Invalid URL: " + msg }
+            InvalidResponse(msg) => { result = "Invalid response: " + msg }
+            TlsError(msg) => { result = "TLS error: " + msg }
+        }
+        return result
+    }
+
+// String utility functions
+
+let split_lines: fn(string) -> List[string] =
+    fn(s: string) -> List[string] {
+        // Split by \r\n (HTTP line endings)
+        return std.string.split(s, "\r\n")
+    }
+
+let append_string: fn(List[string], string) -> List[string] =
+    fn(list: List[string], s: string) -> List[string] {
+        var result: List[string]
+        match list {
+            Nil => { result = Cons(s, Nil) }
+            Cons(head, tail) => { result = Cons(head, append_string(tail, s)) }
+        }
+        return result
+    }
+
+let list_length: fn(List[string]) -> i32 =
+    fn(list: List[string]) -> i32 {
+        var count: i32 = 0
+        var current: List[string] = list
+        loop {
+            match current {
+                Nil => { break }
+                Cons(_, rest) => {
+                    count = count + 1
+                    current = rest
+                }
+            }
+        }
+        return count
+    }
+
+let join_strings: fn(List[string], string) -> string =
+    fn(strings: List[string], separator: string) -> string {
+        var result: string
+        match strings {
+            Nil => { result = "" }
+            Cons(first, rest) => {
+                result = first
+                var current: List[string] = rest
+                loop {
+                    match current {
+                        Nil => { break }
+                        Cons(s, remaining) => {
+                            result = result + separator + s
+                            current = remaining
+                        }
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+// Placeholder types for TCP networking
+// In a real implementation, these would be provided by the std library
+
+type TcpListener = {
+    port: i32
+}
+
+type TcpConnection = {
+    id: i32
+}

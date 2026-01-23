@@ -146,26 +146,26 @@ Middleware system for request/response processing.
 Effectful server that listens and handles requests.
 
 ### 7.1 Create `src/server.ki`
-- [ ] Implement `effect fn serve(port: i32, router: Router) -> Result[void, HttpError]`
-- [ ] Implement `effect fn serveRoutes(port: i32, routes: List[Route]) -> Result[void, HttpError]`
-- [ ] Implement request parsing from raw HTTP
-- [ ] Implement response serialization to raw HTTP
+- [x] Implement `effect fn serve(port: i32, router: Router) -> Result[void, HttpError]`
+- [x] Implement `effect fn serveRoutes(port: i32, routes: List[Route]) -> Result[void, HttpError]`
+- [x] Implement request parsing from raw HTTP
+- [x] Implement response serialization to raw HTTP
 
 ### 7.2 Create `tests/test_server.ki`
-- [ ] Test server startup/shutdown
-- [ ] Test request routing
-- [ ] Test middleware execution order
+- [x] Test server startup/shutdown
+- [x] Test request routing
+- [x] Test middleware execution order
 
 ## Phase 8: Library Entry Point
 
 Main exports and public API.
 
 ### 8.1 Create `src/lib.ki`
-- [ ] Re-export all public types
-- [ ] Re-export client functions
-- [ ] Re-export server functions
-- [ ] Re-export builder functions
-- [ ] Re-export helper functions
+- [x] Re-export all public types
+- [x] Re-export client functions
+- [x] Re-export server functions
+- [x] Re-export builder functions
+- [x] Re-export helper functions
 
 ## Phase 9: Examples
 

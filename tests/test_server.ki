@@ -1,0 +1,361 @@
+/// Tests for the HTTP server module
+///
+/// This module tests request parsing, response serialization,
+/// and server functionality.
+
+module tests.test_server
+
+use http.types.Method
+use http.types.Status
+use http.types.Header
+use http.types.Headers
+use http.types.HttpError
+use http.types.QueryParam
+use http.request.Request
+use http.response.Response
+use http.response.ok
+use http.response.not_found
+use http.response.json_ok
+use http.server.parse_http_request
+use http.server.serialize_http_response
+
+// =============================================================================
+// Request Parsing Tests
+// =============================================================================
+
+/// Test parsing a simple GET request
+let test_parse_get_request: fn() -> void = fn() -> void {
+    let raw: string = "GET /path HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    let result: Result[Request, HttpError] = parse_http_request(raw)
+
+    assert(is_ok(result), "Should parse valid GET request")
+
+    match result {
+        Ok(req) => {
+            assert(methods_equal(req.method, GET), "Method should be GET")
+            assert(req.path == "/path", "Path should be /path")
+            assert(has_header(req.headers, "Host", "example.com"), "Should have Host header")
+        }
+        Err(_) => { }
+    }
+    return
+}
+
+/// Test parsing a GET request with query parameters
+let test_parse_request_with_query: fn() -> void = fn() -> void {
+    let raw: string = "GET /search?q=kira&limit=10 HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    let result: Result[Request, HttpError] = parse_http_request(raw)
+
+    assert(is_ok(result), "Should parse request with query")
+
+    match result {
+        Ok(req) => {
+            assert(req.path == "/search", "Path should exclude query string")
+            assert(has_query_param(req.query, "q", "kira"), "Should have q=kira")
+            assert(has_query_param(req.query, "limit", "10"), "Should have limit=10")
+        }
+        Err(_) => { }
+    }
+    return
+}
+
+/// Test parsing a POST request with body
+let test_parse_post_with_body: fn() -> void = fn() -> void {
+    let raw: string = "POST /users HTTP/1.1\r\nHost: example.com\r\nContent-Type: application/json\r\nContent-Length: 17\r\n\r\n{\"name\": \"Alice\"}"
+    let result: Result[Request, HttpError] = parse_http_request(raw)
+
+    assert(is_ok(result), "Should parse POST with body")
+
+    match result {
+        Ok(req) => {
+            assert(methods_equal(req.method, POST), "Method should be POST")
+            assert(req.path == "/users", "Path should be /users")
+            assert(has_header(req.headers, "Content-Type", "application/json"), "Should have Content-Type")
+            match req.body {
+                Some(body) => {
+                    assert(body == "{\"name\": \"Alice\"}", "Body should match")
+                }
+                None => {
+                    assert(false, "Should have body")
+                }
+            }
+        }
+        Err(_) => { }
+    }
+    return
+}
+
+/// Test parsing request with multiple headers
+let test_parse_multiple_headers: fn() -> void = fn() -> void {
+    let raw: string = "GET /api HTTP/1.1\r\nHost: api.example.com\r\nAuthorization: Bearer token123\r\nAccept: application/json\r\nUser-Agent: KiraTest/1.0\r\n\r\n"
+    let result: Result[Request, HttpError] = parse_http_request(raw)
+
+    assert(is_ok(result), "Should parse request with multiple headers")
+
+    match result {
+        Ok(req) => {
+            assert(has_header(req.headers, "Host", "api.example.com"), "Should have Host")
+            assert(has_header(req.headers, "Authorization", "Bearer token123"), "Should have Authorization")
+            assert(has_header(req.headers, "Accept", "application/json"), "Should have Accept")
+            assert(has_header(req.headers, "User-Agent", "KiraTest/1.0"), "Should have User-Agent")
+        }
+        Err(_) => { }
+    }
+    return
+}
+
+/// Test parsing all HTTP methods
+let test_parse_all_methods: fn() -> void = fn() -> void {
+    let methods: List[string] = Cons("GET", Cons("POST", Cons("PUT", Cons("DELETE", Cons("PATCH", Cons("HEAD", Cons("OPTIONS", Nil)))))))
+
+    var current: List[string] = methods
+    loop {
+        match current {
+            Nil => { break }
+            Cons(method_str, rest) => {
+                let raw: string = method_str + " / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+                let result: Result[Request, HttpError] = parse_http_request(raw)
+                assert(is_ok(result), "Should parse " + method_str + " request")
+                current = rest
+            }
+        }
+    }
+    return
+}
+
+/// Test parsing invalid request - empty
+let test_parse_empty_request: fn() -> void = fn() -> void {
+    let raw: string = ""
+    let result: Result[Request, HttpError] = parse_http_request(raw)
+
+    assert(is_err(result), "Should fail on empty request")
+    return
+}
+
+/// Test parsing invalid request - malformed request line
+let test_parse_malformed_request_line: fn() -> void = fn() -> void {
+    let raw: string = "INVALID REQUEST\r\n\r\n"
+    let result: Result[Request, HttpError] = parse_http_request(raw)
+
+    assert(is_err(result), "Should fail on malformed request line")
+    return
+}
+
+/// Test parsing invalid request - unknown method
+let test_parse_unknown_method: fn() -> void = fn() -> void {
+    let raw: string = "FROBNICATE / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    let result: Result[Request, HttpError] = parse_http_request(raw)
+
+    assert(is_err(result), "Should fail on unknown method")
+    return
+}
+
+/// Test parsing request with path only (no host in path)
+let test_parse_path_only: fn() -> void = fn() -> void {
+    let raw: string = "GET /api/v1/users/123 HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    let result: Result[Request, HttpError] = parse_http_request(raw)
+
+    assert(is_ok(result), "Should parse path-only request")
+
+    match result {
+        Ok(req) => {
+            assert(req.path == "/api/v1/users/123", "Path should be preserved")
+        }
+        Err(_) => { }
+    }
+    return
+}
+
+// =============================================================================
+// Response Serialization Tests
+// =============================================================================
+
+/// Test serializing a simple 200 OK response
+let test_serialize_ok_response: fn() -> void = fn() -> void {
+    let response: Response = ok("Hello, World!")
+    let raw: string = serialize_http_response(response)
+
+    assert(std.string.contains(raw, "HTTP/1.1 200 OK"), "Should have status line")
+    assert(std.string.contains(raw, "Hello, World!"), "Should have body")
+    assert(std.string.contains(raw, "Content-Length: 13"), "Should have Content-Length")
+    return
+}
+
+/// Test serializing a 404 Not Found response
+let test_serialize_not_found_response: fn() -> void = fn() -> void {
+    let response: Response = not_found()
+    let raw: string = serialize_http_response(response)
+
+    assert(std.string.contains(raw, "HTTP/1.1 404 Not Found"), "Should have 404 status")
+    assert(std.string.contains(raw, "Not Found"), "Should have body")
+    return
+}
+
+/// Test serializing a JSON response
+let test_serialize_json_response: fn() -> void = fn() -> void {
+    let response: Response = json_ok("{\"status\": \"success\"}")
+    let raw: string = serialize_http_response(response)
+
+    assert(std.string.contains(raw, "HTTP/1.1 200 OK"), "Should have 200 status")
+    assert(std.string.contains(raw, "Content-Type: application/json"), "Should have JSON Content-Type")
+    assert(std.string.contains(raw, "{\"status\": \"success\"}"), "Should have JSON body")
+    return
+}
+
+/// Test serializing response with custom headers
+let test_serialize_response_with_headers: fn() -> void = fn() -> void {
+    let response: Response = Response {
+        status: OK,
+        headers: Cons(
+            Header { name: "X-Custom-Header", value: "custom-value" },
+            Cons(Header { name: "Content-Type", value: "text/plain" }, Nil)
+        ),
+        body: "test"
+    }
+    let raw: string = serialize_http_response(response)
+
+    assert(std.string.contains(raw, "X-Custom-Header: custom-value"), "Should have custom header")
+    assert(std.string.contains(raw, "Content-Type: text/plain"), "Should have Content-Type")
+    return
+}
+
+/// Test serializing empty body response
+let test_serialize_empty_body: fn() -> void = fn() -> void {
+    let response: Response = Response {
+        status: NoContent,
+        headers: Nil,
+        body: ""
+    }
+    let raw: string = serialize_http_response(response)
+
+    assert(std.string.contains(raw, "HTTP/1.1 204 No Content"), "Should have 204 status")
+    assert(std.string.contains(raw, "Content-Length: 0"), "Should have zero Content-Length")
+    return
+}
+
+/// Test serializing various status codes
+let test_serialize_all_status_codes: fn() -> void = fn() -> void {
+    // Test a selection of status codes
+    let statuses: List[(Status, string)] = Cons(
+        (OK, "200 OK"),
+        Cons((Created, "201 Created"),
+        Cons((BadRequest, "400 Bad Request"),
+        Cons((Unauthorized, "401 Unauthorized"),
+        Cons((Forbidden, "403 Forbidden"),
+        Cons((NotFound, "404 Not Found"),
+        Cons((InternalError, "500 Internal Server Error"),
+        Nil)))))))
+
+    var current: List[(Status, string)] = statuses
+    loop {
+        match current {
+            Nil => { break }
+            Cons((status, expected), rest) => {
+                let response: Response = Response {
+                    status: status,
+                    headers: Nil,
+                    body: ""
+                }
+                let raw: string = serialize_http_response(response)
+                assert(std.string.contains(raw, expected), "Should contain: " + expected)
+                current = rest
+            }
+        }
+    }
+    return
+}
+
+// =============================================================================
+// Round-Trip Tests
+// =============================================================================
+
+/// Test that parsing and serializing maintains structure
+let test_parse_serialize_roundtrip: fn() -> void = fn() -> void {
+    // Create a response and serialize it
+    let original: Response = Response {
+        status: OK,
+        headers: Cons(Header { name: "Content-Type", value: "text/plain" }, Nil),
+        body: "Test body content"
+    }
+    let serialized: string = serialize_http_response(original)
+
+    // Verify serialized contains all parts
+    assert(std.string.contains(serialized, "200 OK"), "Should have status")
+    assert(std.string.contains(serialized, "Content-Type: text/plain"), "Should have header")
+    assert(std.string.contains(serialized, "Test body content"), "Should have body")
+    return
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+let is_ok[T, E]: fn(Result[T, E]) -> bool = fn(result: Result[T, E]) -> bool {
+    var is_ok_result: bool
+    match result {
+        Ok(_) => { is_ok_result = true }
+        Err(_) => { is_ok_result = false }
+    }
+    return is_ok_result
+}
+
+let is_err[T, E]: fn(Result[T, E]) -> bool = fn(result: Result[T, E]) -> bool {
+    return not is_ok(result)
+}
+
+let methods_equal: fn(Method, Method) -> bool = fn(a: Method, b: Method) -> bool {
+    var result: bool
+    match (a, b) {
+        (GET, GET) => { result = true }
+        (POST, POST) => { result = true }
+        (PUT, PUT) => { result = true }
+        (DELETE, DELETE) => { result = true }
+        (PATCH, PATCH) => { result = true }
+        (HEAD, HEAD) => { result = true }
+        (OPTIONS, OPTIONS) => { result = true }
+        _ => { result = false }
+    }
+    return result
+}
+
+let has_header: fn(Headers, string, string) -> bool =
+    fn(headers: Headers, name: string, value: string) -> bool {
+        var found: bool = false
+        var current: Headers = headers
+
+        loop {
+            match current {
+                Nil => { break }
+                Cons(header, rest) => {
+                    if std.string.to_lower(header.name) == std.string.to_lower(name) and header.value == value {
+                        found = true
+                        break
+                    }
+                    current = rest
+                }
+            }
+        }
+
+        return found
+    }
+
+let has_query_param: fn(List[QueryParam], string, string) -> bool =
+    fn(params: List[QueryParam], key: string, value: string) -> bool {
+        var found: bool = false
+        var current: List[QueryParam] = params
+
+        loop {
+            match current {
+                Nil => { break }
+                Cons(param, rest) => {
+                    if param.key == key and param.value == value {
+                        found = true
+                        break
+                    }
+                    current = rest
+                }
+            }
+        }
+
+        return found
+    }
