@@ -40,19 +40,19 @@ Foundation types that all other modules depend on.
 URL parsing and query parameter utilities.
 
 ### 2.1 Create `src/url.ki`
-- [ ] Define `Url` product type `{ scheme, host, port, path, query, fragment }`
-- [ ] Implement `parseUrl(url: string) -> Result[Url, HttpError]`
-- [ ] Implement `buildUrl(url: Url) -> string`
-- [ ] Implement `getQueryParam(req: Request, name: string) -> Option[string]`
-- [ ] Implement `getQueryParams(req: Request, name: string) -> List[string]`
-- [ ] Implement `pathParam(req: Request, name: string) -> Option[string]`
+- [x] Define `Url` product type `{ scheme, host, port, path, query, fragment }`
+- [x] Implement `parseUrl(url: string) -> Result[Url, HttpError]`
+- [x] Implement `buildUrl(url: Url) -> string`
+- [x] Implement `getQueryParam(req: Request, name: string) -> Option[string]`
+- [x] Implement `getQueryParams(req: Request, name: string) -> List[string]`
+- [x] Implement `pathParam(req: Request, name: string) -> Option[string]`
 
 ### 2.2 Create `tests/test_url.ki`
-- [ ] Test URL parsing (various schemes, ports, paths, queries)
-- [ ] Test URL building round-trips
-- [ ] Test query parameter extraction
-- [ ] Test path parameter extraction
-- [ ] Test invalid URL handling
+- [x] Test URL parsing (various schemes, ports, paths, queries)
+- [x] Test URL building round-trips
+- [x] Test query parameter extraction
+- [x] Test path parameter extraction
+- [x] Test invalid URL handling
 
 ## Phase 3: Request/Response
 

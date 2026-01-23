@@ -1,0 +1,671 @@
+/// Tests for kira-http URL utilities
+///
+/// Tests URL parsing, URL building round-trips, query parameter extraction,
+/// path parameter extraction, and invalid URL handling.
+
+module http.tests.test_url
+
+use http.types.HttpError
+use http.types.QueryParam
+use http.url.Url
+use http.url.parse_url
+use http.url.build_url
+use http.url.parse_query_string
+use http.url.get_query_param
+use http.url.get_query_params
+use http.url.extract_path_param
+use http.url.path_matches
+
+// URL parsing tests - various schemes
+
+let test_parse_url_https: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com/path")
+    var is_valid: bool
+    match result {
+        Ok(url) => {
+            is_valid = url.scheme == "https" and url.host == "example.com" and url.path == "/path"
+        }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_parse_url_http: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("http://example.com")
+    var is_valid: bool
+    match result {
+        Ok(url) => {
+            is_valid = url.scheme == "http" and url.host == "example.com"
+        }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_parse_url_ftp: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("ftp://files.example.com/download")
+    var is_valid: bool
+    match result {
+        Ok(url) => {
+            is_valid = url.scheme == "ftp" and url.host == "files.example.com"
+        }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+// URL parsing tests - with port
+
+let test_parse_url_with_port: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com:8080/api")
+    var is_valid: bool
+    match result {
+        Ok(url) => {
+            match url.port {
+                Some(p) => { is_valid = p == 8080 }
+                None => { is_valid = false }
+            }
+        }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_parse_url_with_port_443: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com:443")
+    var is_valid: bool
+    match result {
+        Ok(url) => {
+            match url.port {
+                Some(p) => { is_valid = p == 443 }
+                None => { is_valid = false }
+            }
+        }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_parse_url_without_port: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com/path")
+    var is_valid: bool
+    match result {
+        Ok(url) => {
+            match url.port {
+                Some(_) => { is_valid = false }
+                None => { is_valid = true }
+            }
+        }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+// URL parsing tests - with path
+
+let test_parse_url_simple_path: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com/users")
+    var is_valid: bool
+    match result {
+        Ok(url) => { is_valid = url.path == "/users" }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_parse_url_nested_path: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com/api/v1/users")
+    var is_valid: bool
+    match result {
+        Ok(url) => { is_valid = url.path == "/api/v1/users" }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_parse_url_no_path: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com")
+    var is_valid: bool
+    match result {
+        Ok(url) => { is_valid = url.path == "/" }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_parse_url_root_path: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com/")
+    var is_valid: bool
+    match result {
+        Ok(url) => { is_valid = url.path == "/" }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+// URL parsing tests - with query
+
+let test_parse_url_with_query: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com/search?q=kira")
+    var is_valid: bool
+    match result {
+        Ok(url) => {
+            match url.query {
+                Some(q) => { is_valid = q == "q=kira" }
+                None => { is_valid = false }
+            }
+        }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_parse_url_with_multiple_query_params: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com/search?q=kira&limit=10")
+    var is_valid: bool
+    match result {
+        Ok(url) => {
+            match url.query {
+                Some(q) => { is_valid = q == "q=kira&limit=10" }
+                None => { is_valid = false }
+            }
+        }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_parse_url_without_query: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com/path")
+    var is_valid: bool
+    match result {
+        Ok(url) => {
+            match url.query {
+                Some(_) => { is_valid = false }
+                None => { is_valid = true }
+            }
+        }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+// URL parsing tests - with fragment
+
+let test_parse_url_with_fragment: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com/page#section")
+    var is_valid: bool
+    match result {
+        Ok(url) => {
+            match url.fragment {
+                Some(f) => { is_valid = f == "section" }
+                None => { is_valid = false }
+            }
+        }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_parse_url_without_fragment: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com/path")
+    var is_valid: bool
+    match result {
+        Ok(url) => {
+            match url.fragment {
+                Some(_) => { is_valid = false }
+                None => { is_valid = true }
+            }
+        }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+// URL parsing tests - complete URL
+
+let test_parse_url_complete: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://api.example.com:8080/v1/users?id=123#details")
+    var is_valid: bool
+    match result {
+        Ok(url) => {
+            var port_valid: bool
+            match url.port {
+                Some(p) => { port_valid = p == 8080 }
+                None => { port_valid = false }
+            }
+            var query_valid: bool
+            match url.query {
+                Some(q) => { query_valid = q == "id=123" }
+                None => { query_valid = false }
+            }
+            var fragment_valid: bool
+            match url.fragment {
+                Some(f) => { fragment_valid = f == "details" }
+                None => { fragment_valid = false }
+            }
+            is_valid = url.scheme == "https" and
+                       url.host == "api.example.com" and
+                       port_valid and
+                       url.path == "/v1/users" and
+                       query_valid and
+                       fragment_valid
+        }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+// URL building tests - round-trips
+
+let test_build_url_simple: fn() -> void = fn() -> void {
+    let url: Url = Url {
+        scheme: "https",
+        host: "example.com",
+        port: None,
+        path: "/",
+        query: None,
+        fragment: None
+    }
+    let result: string = build_url(url)
+    assert(result == "https://example.com/")
+    return
+}
+
+let test_build_url_with_port: fn() -> void = fn() -> void {
+    let url: Url = Url {
+        scheme: "https",
+        host: "example.com",
+        port: Some(8080),
+        path: "/api",
+        query: None,
+        fragment: None
+    }
+    let result: string = build_url(url)
+    assert(result == "https://example.com:8080/api")
+    return
+}
+
+let test_build_url_with_query: fn() -> void = fn() -> void {
+    let url: Url = Url {
+        scheme: "https",
+        host: "example.com",
+        port: None,
+        path: "/search",
+        query: Some("q=kira"),
+        fragment: None
+    }
+    let result: string = build_url(url)
+    assert(result == "https://example.com/search?q=kira")
+    return
+}
+
+let test_build_url_with_fragment: fn() -> void = fn() -> void {
+    let url: Url = Url {
+        scheme: "https",
+        host: "example.com",
+        port: None,
+        path: "/page",
+        query: None,
+        fragment: Some("section")
+    }
+    let result: string = build_url(url)
+    assert(result == "https://example.com/page#section")
+    return
+}
+
+let test_build_url_complete: fn() -> void = fn() -> void {
+    let url: Url = Url {
+        scheme: "https",
+        host: "api.example.com",
+        port: Some(8080),
+        path: "/v1/users",
+        query: Some("id=123"),
+        fragment: Some("details")
+    }
+    let result: string = build_url(url)
+    assert(result == "https://api.example.com:8080/v1/users?id=123#details")
+    return
+}
+
+let test_parse_build_roundtrip: fn() -> void = fn() -> void {
+    let original: string = "https://example.com:8080/path?query=value#fragment"
+    let parse_result: Result[Url, HttpError] = parse_url(original)
+    var is_valid: bool
+    match parse_result {
+        Ok(url) => {
+            let rebuilt: string = build_url(url)
+            is_valid = rebuilt == original
+        }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_parse_build_roundtrip_minimal: fn() -> void = fn() -> void {
+    let original: string = "http://localhost/"
+    let parse_result: Result[Url, HttpError] = parse_url(original)
+    var is_valid: bool
+    match parse_result {
+        Ok(url) => {
+            let rebuilt: string = build_url(url)
+            is_valid = rebuilt == original
+        }
+        Err(_) => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+// Query parameter extraction tests
+
+let test_parse_query_string_single: fn() -> void = fn() -> void {
+    let params: List[QueryParam] = parse_query_string("key=value")
+    var is_valid: bool
+    match params {
+        Cons(param, Nil) => {
+            is_valid = param.key == "key" and param.value == "value"
+        }
+        _ => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_parse_query_string_multiple: fn() -> void = fn() -> void {
+    let params: List[QueryParam] = parse_query_string("a=1&b=2&c=3")
+    var count: i32 = 0
+    var current: List[QueryParam] = params
+    var continue_loop: bool = true
+    while continue_loop {
+        match current {
+            Cons(_, rest) => {
+                count = count + 1
+                current = rest
+            }
+            Nil => {
+                continue_loop = false
+            }
+        }
+    }
+    assert(count == 3)
+    return
+}
+
+let test_parse_query_string_empty: fn() -> void = fn() -> void {
+    let params: List[QueryParam] = parse_query_string("")
+    var is_empty: bool
+    match params {
+        Nil => { is_empty = true }
+        Cons(_, _) => { is_empty = false }
+    }
+    assert(is_empty)
+    return
+}
+
+let test_parse_query_string_key_no_value: fn() -> void = fn() -> void {
+    let params: List[QueryParam] = parse_query_string("flag")
+    var is_valid: bool
+    match params {
+        Cons(param, Nil) => {
+            is_valid = param.key == "flag" and param.value == ""
+        }
+        _ => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_get_query_param_existing: fn() -> void = fn() -> void {
+    let params: List[QueryParam] = parse_query_string("name=kira&version=1")
+    let result: Option[string] = get_query_param(params, "name")
+    var is_valid: bool
+    match result {
+        Some(v) => { is_valid = v == "kira" }
+        None => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_get_query_param_not_found: fn() -> void = fn() -> void {
+    let params: List[QueryParam] = parse_query_string("name=kira")
+    let result: Option[string] = get_query_param(params, "missing")
+    var is_not_found: bool
+    match result {
+        Some(_) => { is_not_found = false }
+        None => { is_not_found = true }
+    }
+    assert(is_not_found)
+    return
+}
+
+let test_get_query_params_multiple_values: fn() -> void = fn() -> void {
+    let params: List[QueryParam] = parse_query_string("tag=a&tag=b&tag=c")
+    let result: List[string] = get_query_params(params, "tag")
+    var count: i32 = 0
+    var current: List[string] = result
+    var continue_loop: bool = true
+    while continue_loop {
+        match current {
+            Cons(_, rest) => {
+                count = count + 1
+                current = rest
+            }
+            Nil => {
+                continue_loop = false
+            }
+        }
+    }
+    assert(count == 3)
+    return
+}
+
+let test_get_query_params_single_value: fn() -> void = fn() -> void {
+    let params: List[QueryParam] = parse_query_string("name=kira")
+    let result: List[string] = get_query_params(params, "name")
+    var is_valid: bool
+    match result {
+        Cons(v, Nil) => { is_valid = v == "kira" }
+        _ => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_get_query_params_not_found: fn() -> void = fn() -> void {
+    let params: List[QueryParam] = parse_query_string("name=kira")
+    let result: List[string] = get_query_params(params, "missing")
+    var is_empty: bool
+    match result {
+        Nil => { is_empty = true }
+        Cons(_, _) => { is_empty = false }
+    }
+    assert(is_empty)
+    return
+}
+
+// Path parameter extraction tests
+
+let test_extract_path_param_simple: fn() -> void = fn() -> void {
+    let result: Option[string] = extract_path_param("/users/:id", "/users/123", "id")
+    var is_valid: bool
+    match result {
+        Some(v) => { is_valid = v == "123" }
+        None => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_extract_path_param_nested: fn() -> void = fn() -> void {
+    let result: Option[string] = extract_path_param("/posts/:postId/comments/:commentId", "/posts/42/comments/7", "commentId")
+    var is_valid: bool
+    match result {
+        Some(v) => { is_valid = v == "7" }
+        None => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_extract_path_param_first_of_multiple: fn() -> void = fn() -> void {
+    let result: Option[string] = extract_path_param("/posts/:postId/comments/:commentId", "/posts/42/comments/7", "postId")
+    var is_valid: bool
+    match result {
+        Some(v) => { is_valid = v == "42" }
+        None => { is_valid = false }
+    }
+    assert(is_valid)
+    return
+}
+
+let test_extract_path_param_not_found: fn() -> void = fn() -> void {
+    let result: Option[string] = extract_path_param("/users/:id", "/users/123", "userId")
+    var is_not_found: bool
+    match result {
+        Some(_) => { is_not_found = false }
+        None => { is_not_found = true }
+    }
+    assert(is_not_found)
+    return
+}
+
+let test_extract_path_param_no_params: fn() -> void = fn() -> void {
+    let result: Option[string] = extract_path_param("/users/list", "/users/list", "id")
+    var is_not_found: bool
+    match result {
+        Some(_) => { is_not_found = false }
+        None => { is_not_found = true }
+    }
+    assert(is_not_found)
+    return
+}
+
+// Path matching tests
+
+let test_path_matches_exact: fn() -> void = fn() -> void {
+    assert(path_matches("/users", "/users") == true)
+    return
+}
+
+let test_path_matches_with_param: fn() -> void = fn() -> void {
+    assert(path_matches("/users/:id", "/users/123") == true)
+    return
+}
+
+let test_path_matches_with_multiple_params: fn() -> void = fn() -> void {
+    assert(path_matches("/posts/:postId/comments/:commentId", "/posts/42/comments/7") == true)
+    return
+}
+
+let test_path_matches_different_length_false: fn() -> void = fn() -> void {
+    assert(path_matches("/users/:id", "/users/123/extra") == false)
+    return
+}
+
+let test_path_matches_different_segment_false: fn() -> void = fn() -> void {
+    assert(path_matches("/users/:id", "/posts/123") == false)
+    return
+}
+
+let test_path_matches_root: fn() -> void = fn() -> void {
+    assert(path_matches("/", "/") == true)
+    return
+}
+
+// Invalid URL handling tests
+
+let test_parse_url_empty: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("")
+    var is_error: bool
+    match result {
+        Ok(_) => { is_error = false }
+        Err(_) => { is_error = true }
+    }
+    assert(is_error)
+    return
+}
+
+let test_parse_url_missing_scheme: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("example.com/path")
+    var is_error: bool
+    match result {
+        Ok(_) => { is_error = false }
+        Err(_) => { is_error = true }
+    }
+    assert(is_error)
+    return
+}
+
+let test_parse_url_empty_scheme: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("://example.com")
+    var is_error: bool
+    match result {
+        Ok(_) => { is_error = false }
+        Err(_) => { is_error = true }
+    }
+    assert(is_error)
+    return
+}
+
+let test_parse_url_missing_host: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https:///path")
+    var is_error: bool
+    match result {
+        Ok(_) => { is_error = false }
+        Err(_) => { is_error = true }
+    }
+    assert(is_error)
+    return
+}
+
+let test_parse_url_invalid_port_letters: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com:abc/path")
+    var is_error: bool
+    match result {
+        Ok(_) => { is_error = false }
+        Err(_) => { is_error = true }
+    }
+    assert(is_error)
+    return
+}
+
+let test_parse_url_port_out_of_range: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com:70000/path")
+    var is_error: bool
+    match result {
+        Ok(_) => { is_error = false }
+        Err(_) => { is_error = true }
+    }
+    assert(is_error)
+    return
+}
+
+let test_parse_url_negative_port: fn() -> void = fn() -> void {
+    let result: Result[Url, HttpError] = parse_url("https://example.com:-1/path")
+    var is_error: bool
+    match result {
+        Ok(_) => { is_error = false }
+        Err(_) => { is_error = true }
+    }
+    assert(is_error)
+    return
+}
