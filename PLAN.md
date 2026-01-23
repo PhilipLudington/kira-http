@@ -188,10 +188,10 @@ Working examples demonstrating library usage.
 Final documentation updates.
 
 ### 10.1 Update `README.md`
-- [ ] Installation instructions
-- [ ] Quick start examples
-- [ ] API overview
-- [ ] Link to full documentation
+- [x] Installation instructions
+- [x] Quick start examples
+- [x] API overview
+- [x] Link to full documentation
 
 ## Dependencies
 
