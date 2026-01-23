@@ -1,0 +1,120 @@
+/// Status code utilities for kira-http
+///
+/// This module provides functions for working with HTTP status codes:
+/// converting between Status and numeric codes, and checking status categories.
+
+module http.status
+
+use http.types.Status
+
+/// Converts a Status to its numeric HTTP status code
+///
+/// # Arguments
+/// * `status` - The status to convert
+///
+/// # Returns
+/// The numeric HTTP status code (e.g., 200 for OK)
+pub let status_code: fn(Status) -> i32 = fn(status: Status) -> i32 {
+    var code: i32
+    match status {
+        OK => { code = 200 }
+        Created => { code = 201 }
+        Accepted => { code = 202 }
+        NoContent => { code = 204 }
+        MovedPermanently => { code = 301 }
+        Found => { code = 302 }
+        NotModified => { code = 304 }
+        BadRequest => { code = 400 }
+        Unauthorized => { code = 401 }
+        Forbidden => { code = 403 }
+        NotFound => { code = 404 }
+        MethodNotAllowed => { code = 405 }
+        Conflict => { code = 409 }
+        InternalError => { code = 500 }
+        NotImplemented => { code = 501 }
+        BadGateway => { code = 502 }
+        ServiceUnavailable => { code = 503 }
+        Custom(n) => { code = n }
+    }
+    return code
+}
+
+/// Converts a numeric HTTP status code to a Status
+///
+/// # Arguments
+/// * `code` - The numeric status code
+///
+/// # Returns
+/// The corresponding Status variant, or Custom(code) for unknown codes
+pub let status_from_code: fn(i32) -> Status = fn(code: i32) -> Status {
+    var status: Status
+    match code {
+        200 => { status = OK }
+        201 => { status = Created }
+        202 => { status = Accepted }
+        204 => { status = NoContent }
+        301 => { status = MovedPermanently }
+        302 => { status = Found }
+        304 => { status = NotModified }
+        400 => { status = BadRequest }
+        401 => { status = Unauthorized }
+        403 => { status = Forbidden }
+        404 => { status = NotFound }
+        405 => { status = MethodNotAllowed }
+        409 => { status = Conflict }
+        500 => { status = InternalError }
+        501 => { status = NotImplemented }
+        502 => { status = BadGateway }
+        503 => { status = ServiceUnavailable }
+        _ => { status = Custom(code) }
+    }
+    return status
+}
+
+/// Checks if a status indicates success (2xx)
+///
+/// # Arguments
+/// * `status` - The status to check
+///
+/// # Returns
+/// true if the status code is in the 200-299 range
+pub let is_success: fn(Status) -> bool = fn(status: Status) -> bool {
+    let code: i32 = status_code(status)
+    return code >= 200 and code < 300
+}
+
+/// Checks if a status indicates a redirect (3xx)
+///
+/// # Arguments
+/// * `status` - The status to check
+///
+/// # Returns
+/// true if the status code is in the 300-399 range
+pub let is_redirect: fn(Status) -> bool = fn(status: Status) -> bool {
+    let code: i32 = status_code(status)
+    return code >= 300 and code < 400
+}
+
+/// Checks if a status indicates a client error (4xx)
+///
+/// # Arguments
+/// * `status` - The status to check
+///
+/// # Returns
+/// true if the status code is in the 400-499 range
+pub let is_client_error: fn(Status) -> bool = fn(status: Status) -> bool {
+    let code: i32 = status_code(status)
+    return code >= 400 and code < 500
+}
+
+/// Checks if a status indicates a server error (5xx)
+///
+/// # Arguments
+/// * `status` - The status to check
+///
+/// # Returns
+/// true if the status code is in the 500-599 range
+pub let is_server_error: fn(Status) -> bool = fn(status: Status) -> bool {
+    let code: i32 = status_code(status)
+    return code >= 500 and code < 600
+}

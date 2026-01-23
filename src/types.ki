@@ -1,0 +1,63 @@
+/// Core types for kira-http
+///
+/// This module defines the fundamental types used throughout the HTTP library:
+/// Method, Status, Header, Headers, and HttpError.
+
+module http.types
+
+/// HTTP request methods
+pub type Method =
+    | GET
+    | POST
+    | PUT
+    | DELETE
+    | PATCH
+    | HEAD
+    | OPTIONS
+
+/// HTTP response status codes
+///
+/// Common status codes are defined as variants. For non-standard codes,
+/// use Custom(i32).
+pub type Status =
+    | OK
+    | Created
+    | Accepted
+    | NoContent
+    | MovedPermanently
+    | Found
+    | NotModified
+    | BadRequest
+    | Unauthorized
+    | Forbidden
+    | NotFound
+    | MethodNotAllowed
+    | Conflict
+    | InternalError
+    | NotImplemented
+    | BadGateway
+    | ServiceUnavailable
+    | Custom(i32)
+
+/// A single HTTP header as a name-value pair
+pub type Header = {
+    name: string,
+    value: string
+}
+
+/// A collection of HTTP headers
+pub type Headers = List[Header]
+
+/// Errors that can occur during HTTP operations
+pub type HttpError =
+    | ConnectionFailed(string)
+    | Timeout
+    | InvalidUrl(string)
+    | InvalidResponse(string)
+    | TlsError(string)
+
+/// A key-value pair for query parameters
+pub type QueryParam = {
+    key: string,
+    value: string
+}

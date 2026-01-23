@@ -7,33 +7,33 @@ Development plan for the kira-http library based on DESIGN.md.
 Foundation types that all other modules depend on.
 
 ### 1.1 Create `src/types.ki`
-- [ ] Define `Method` sum type (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS)
-- [ ] Define `Status` sum type (OK, Created, BadRequest, NotFound, etc.)
-- [ ] Define `Header` product type `{ name: string, value: string }`
-- [ ] Define `Headers` type alias `List[Header]`
-- [ ] Define `HttpError` sum type (ConnectionFailed, Timeout, InvalidUrl, InvalidResponse, TlsError)
+- [x] Define `Method` sum type (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS)
+- [x] Define `Status` sum type (OK, Created, BadRequest, NotFound, etc.)
+- [x] Define `Header` product type `{ name: string, value: string }`
+- [x] Define `Headers` type alias `List[Header]`
+- [x] Define `HttpError` sum type (ConnectionFailed, Timeout, InvalidUrl, InvalidResponse, TlsError)
 
 ### 1.2 Create `src/status.ki`
-- [ ] Implement `statusCode(status: Status) -> i32`
-- [ ] Implement `statusFromCode(code: i32) -> Status`
-- [ ] Implement `isSuccess(status: Status) -> bool`
-- [ ] Implement `isRedirect(status: Status) -> bool`
-- [ ] Implement `isClientError(status: Status) -> bool`
-- [ ] Implement `isServerError(status: Status) -> bool`
+- [x] Implement `statusCode(status: Status) -> i32`
+- [x] Implement `statusFromCode(code: i32) -> Status`
+- [x] Implement `isSuccess(status: Status) -> bool`
+- [x] Implement `isRedirect(status: Status) -> bool`
+- [x] Implement `isClientError(status: Status) -> bool`
+- [x] Implement `isServerError(status: Status) -> bool`
 
 ### 1.3 Create `src/headers.ki`
-- [ ] Implement `getHeader(headers: Headers, name: string) -> Option[string]`
-- [ ] Implement `setHeader(headers: Headers, name: string, value: string) -> Headers`
-- [ ] Implement `removeHeader(headers: Headers, name: string) -> Headers`
-- [ ] Implement `contentType(value: string) -> Header`
-- [ ] Implement `authorization(value: string) -> Header`
-- [ ] Implement `accept(value: string) -> Header`
-- [ ] Define constants: `contentTypeJson`, `contentTypeHtml`, `contentTypeText`
+- [x] Implement `getHeader(headers: Headers, name: string) -> Option[string]`
+- [x] Implement `setHeader(headers: Headers, name: string, value: string) -> Headers`
+- [x] Implement `removeHeader(headers: Headers, name: string) -> Headers`
+- [x] Implement `contentType(value: string) -> Header`
+- [x] Implement `authorization(value: string) -> Header`
+- [x] Implement `accept(value: string) -> Header`
+- [x] Define constants: `contentTypeJson`, `contentTypeHtml`, `contentTypeText`
 
 ### 1.4 Create `tests/test_types.ki`
-- [ ] Test status code conversion round-trips
-- [ ] Test status category checks (success, redirect, client error, server error)
-- [ ] Test header manipulation functions
+- [x] Test status code conversion round-trips
+- [x] Test status category checks (success, redirect, client error, server error)
+- [x] Test header manipulation functions
 
 ## Phase 2: URL Handling
 

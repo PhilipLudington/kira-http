@@ -1,0 +1,138 @@
+/// Header utilities for kira-http
+///
+/// This module provides functions for working with HTTP headers:
+/// getting, setting, and removing headers, plus common header helpers.
+
+module http.headers
+
+use http.types.Header
+use http.types.Headers
+
+/// Gets the value of a header by name (case-insensitive)
+///
+/// # Arguments
+/// * `headers` - The list of headers to search
+/// * `name` - The header name to find
+///
+/// # Returns
+/// Some(value) if the header exists, None otherwise
+pub let get_header: fn(Headers, string) -> Option[string] =
+    fn(headers: Headers, name: string) -> Option[string] {
+        let lower_name: string = std.string.to_lower(name)
+        return find_header_value(headers, lower_name)
+    }
+
+let find_header_value: fn(Headers, string) -> Option[string] =
+    fn(headers: Headers, lower_name: string) -> Option[string] {
+        var result: Option[string]
+        match headers {
+            Nil => { result = None }
+            Cons(header, rest) => {
+                let header_lower: string = std.string.to_lower(header.name)
+                if header_lower == lower_name {
+                    result = Some(header.value)
+                } else {
+                    result = find_header_value(rest, lower_name)
+                }
+            }
+        }
+        return result
+    }
+
+/// Sets a header value, replacing any existing header with the same name
+///
+/// # Arguments
+/// * `headers` - The existing headers
+/// * `name` - The header name to set
+/// * `value` - The header value to set
+///
+/// # Returns
+/// A new headers list with the header set
+pub let set_header: fn(Headers, string, string) -> Headers =
+    fn(headers: Headers, name: string, value: string) -> Headers {
+        let without_existing: Headers = remove_header(headers, name)
+        let new_header: Header = Header { name: name, value: value }
+        return Cons(new_header, without_existing)
+    }
+
+/// Removes all headers with the given name (case-insensitive)
+///
+/// # Arguments
+/// * `headers` - The existing headers
+/// * `name` - The header name to remove
+///
+/// # Returns
+/// A new headers list without headers matching the name
+pub let remove_header: fn(Headers, string) -> Headers =
+    fn(headers: Headers, name: string) -> Headers {
+        let lower_name: string = std.string.to_lower(name)
+        return filter_headers(headers, lower_name)
+    }
+
+let filter_headers: fn(Headers, string) -> Headers =
+    fn(headers: Headers, lower_name: string) -> Headers {
+        var result: Headers
+        match headers {
+            Nil => { result = Nil }
+            Cons(header, rest) => {
+                let header_lower: string = std.string.to_lower(header.name)
+                if header_lower == lower_name {
+                    result = filter_headers(rest, lower_name)
+                } else {
+                    result = Cons(header, filter_headers(rest, lower_name))
+                }
+            }
+        }
+        return result
+    }
+
+/// Creates a Content-Type header
+///
+/// # Arguments
+/// * `value` - The content type value (e.g., "application/json")
+///
+/// # Returns
+/// A Header with name "Content-Type"
+pub let content_type: fn(string) -> Header = fn(value: string) -> Header {
+    return Header { name: "Content-Type", value: value }
+}
+
+/// Creates an Authorization header
+///
+/// # Arguments
+/// * `value` - The authorization value (e.g., "Bearer token123")
+///
+/// # Returns
+/// A Header with name "Authorization"
+pub let authorization: fn(string) -> Header = fn(value: string) -> Header {
+    return Header { name: "Authorization", value: value }
+}
+
+/// Creates an Accept header
+///
+/// # Arguments
+/// * `value` - The accept value (e.g., "application/json")
+///
+/// # Returns
+/// A Header with name "Accept"
+pub let accept: fn(string) -> Header = fn(value: string) -> Header {
+    return Header { name: "Accept", value: value }
+}
+
+/// Pre-defined Content-Type header for JSON
+pub let CONTENT_TYPE_JSON: Header = Header {
+    name: "Content-Type",
+    value: "application/json"
+}
+
+/// Pre-defined Content-Type header for HTML
+pub let CONTENT_TYPE_HTML: Header = Header {
+    name: "Content-Type",
+    value: "text/html"
+}
+
+/// Pre-defined Content-Type header for plain text
+pub let CONTENT_TYPE_TEXT: Header = Header {
+    name: "Content-Type",
+    value: "text/plain"
+}
