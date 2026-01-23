@@ -59,33 +59,33 @@ URL parsing and query parameter utilities.
 Request and response types with builder pattern.
 
 ### 3.1 Create `src/request.ki`
-- [ ] Define `Request` product type
-- [ ] Define `RequestBuilder` product type
-- [ ] Implement `newRequest(method: Method, url: string) -> RequestBuilder`
-- [ ] Implement `withHeader(builder, name, value) -> RequestBuilder`
-- [ ] Implement `withHeaders(builder, headers) -> RequestBuilder`
-- [ ] Implement `withBody(builder, body) -> RequestBuilder`
-- [ ] Implement `withJson[T](builder, data) -> RequestBuilder`
-- [ ] Implement `withTimeout(builder, ms) -> RequestBuilder`
+- [x] Define `Request` product type
+- [x] Define `RequestBuilder` product type
+- [x] Implement `newRequest(method: Method, url: string) -> RequestBuilder`
+- [x] Implement `withHeader(builder, name, value) -> RequestBuilder`
+- [x] Implement `withHeaders(builder, headers) -> RequestBuilder`
+- [x] Implement `withBody(builder, body) -> RequestBuilder`
+- [x] Implement `withJson[T](builder, data) -> RequestBuilder`
+- [x] Implement `withTimeout(builder, ms) -> RequestBuilder`
 
 ### 3.2 Create `src/response.ki`
-- [ ] Define `Response` product type
-- [ ] Implement `ok(body: string) -> Response`
-- [ ] Implement `created(body: string) -> Response`
-- [ ] Implement `noContent() -> Response`
-- [ ] Implement `badRequest(message: string) -> Response`
-- [ ] Implement `notFound() -> Response`
-- [ ] Implement `internalError(message: string) -> Response`
-- [ ] Implement `jsonResponse[T](status: Status, data: T) -> Response`
+- [x] Define `Response` product type
+- [x] Implement `ok(body: string) -> Response`
+- [x] Implement `created(body: string) -> Response`
+- [x] Implement `noContent() -> Response`
+- [x] Implement `badRequest(message: string) -> Response`
+- [x] Implement `notFound() -> Response`
+- [x] Implement `internalError(message: string) -> Response`
+- [x] Implement `jsonResponse[T](status: Status, data: T) -> Response`
 
 ### 3.3 Create `tests/test_request.ki`
-- [ ] Test request builder chaining
-- [ ] Test header accumulation
-- [ ] Test body setting
+- [x] Test request builder chaining
+- [x] Test header accumulation
+- [x] Test body setting
 
 ### 3.4 Create `tests/test_response.ki`
-- [ ] Test response helper functions
-- [ ] Test correct status codes and headers
+- [x] Test response helper functions
+- [x] Test correct status codes and headers
 
 ## Phase 4: HTTP Client
 

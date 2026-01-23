@@ -1,0 +1,495 @@
+/// Tests for kira-http request module
+///
+/// Tests request builder chaining, header accumulation, body setting, and build.
+
+module http.tests.test_request
+
+use http.types.Method
+use http.types.Header
+use http.types.Headers
+use http.types.QueryParam
+use http.request.Request
+use http.request.RequestBuilder
+use http.request.new_request
+use http.request.with_header
+use http.request.with_headers
+use http.request.with_body
+use http.request.with_json
+use http.request.with_timeout
+use http.request.build
+use http.request.get_query_param
+use http.request.get_query_params
+use http.request.path_param
+use http.request.with_path_params
+use http.headers.get_header
+
+// new_request tests
+
+let test_new_request_sets_method: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(GET, "https://example.com")
+    var matches: bool
+    match builder.method {
+        GET => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_new_request_sets_url: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(GET, "https://example.com")
+    assert(builder.url == "https://example.com")
+    return
+}
+
+let test_new_request_empty_headers: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(GET, "https://example.com")
+    var is_empty: bool
+    match builder.headers {
+        Nil => { is_empty = true }
+        Cons(_, _) => { is_empty = false }
+    }
+    assert(is_empty)
+    return
+}
+
+let test_new_request_no_body: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(GET, "https://example.com")
+    var is_none: bool
+    match builder.body {
+        None => { is_none = true }
+        Some(_) => { is_none = false }
+    }
+    assert(is_none)
+    return
+}
+
+let test_new_request_no_timeout: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(GET, "https://example.com")
+    var is_none: bool
+    match builder.timeout {
+        None => { is_none = true }
+        Some(_) => { is_none = false }
+    }
+    assert(is_none)
+    return
+}
+
+let test_new_request_post: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(POST, "https://example.com/api")
+    var matches: bool
+    match builder.method {
+        POST => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+// with_header tests
+
+let test_with_header_adds_header: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(GET, "https://example.com")
+        |> with_header("Content-Type", "application/json")
+    var found: bool
+    match get_header(builder.headers, "Content-Type") {
+        Some(v) => { found = v == "application/json" }
+        None => { found = false }
+    }
+    assert(found)
+    return
+}
+
+let test_with_header_chaining: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(GET, "https://example.com")
+        |> with_header("Content-Type", "application/json")
+        |> with_header("Accept", "text/html")
+
+    var has_content_type: bool
+    match get_header(builder.headers, "Content-Type") {
+        Some(v) => { has_content_type = v == "application/json" }
+        None => { has_content_type = false }
+    }
+
+    var has_accept: bool
+    match get_header(builder.headers, "Accept") {
+        Some(v) => { has_accept = v == "text/html" }
+        None => { has_accept = false }
+    }
+
+    assert(has_content_type and has_accept)
+    return
+}
+
+let test_with_header_replaces_existing: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(GET, "https://example.com")
+        |> with_header("Content-Type", "text/plain")
+        |> with_header("Content-Type", "application/json")
+
+    var found: bool
+    match get_header(builder.headers, "Content-Type") {
+        Some(v) => { found = v == "application/json" }
+        None => { found = false }
+    }
+    assert(found)
+    return
+}
+
+// with_headers tests
+
+let test_with_headers_adds_multiple: fn() -> void = fn() -> void {
+    let headers: Headers = Cons(
+        Header { name: "Content-Type", value: "application/json" },
+        Cons(
+            Header { name: "Accept", value: "text/html" },
+            Nil
+        )
+    )
+    let builder: RequestBuilder = new_request(GET, "https://example.com")
+        |> with_headers(headers)
+
+    var has_content_type: bool
+    match get_header(builder.headers, "Content-Type") {
+        Some(v) => { has_content_type = v == "application/json" }
+        None => { has_content_type = false }
+    }
+
+    var has_accept: bool
+    match get_header(builder.headers, "Accept") {
+        Some(v) => { has_accept = v == "text/html" }
+        None => { has_accept = false }
+    }
+
+    assert(has_content_type and has_accept)
+    return
+}
+
+let test_with_headers_empty_list: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(GET, "https://example.com")
+        |> with_header("Existing", "value")
+        |> with_headers(Nil)
+
+    var found: bool
+    match get_header(builder.headers, "Existing") {
+        Some(v) => { found = v == "value" }
+        None => { found = false }
+    }
+    assert(found)
+    return
+}
+
+// with_body tests
+
+let test_with_body_sets_body: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(POST, "https://example.com")
+        |> with_body("request body")
+
+    var has_body: bool
+    match builder.body {
+        Some(b) => { has_body = b == "request body" }
+        None => { has_body = false }
+    }
+    assert(has_body)
+    return
+}
+
+let test_with_body_replaces_existing: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(POST, "https://example.com")
+        |> with_body("first body")
+        |> with_body("second body")
+
+    var has_body: bool
+    match builder.body {
+        Some(b) => { has_body = b == "second body" }
+        None => { has_body = false }
+    }
+    assert(has_body)
+    return
+}
+
+// with_json tests
+
+let test_with_json_sets_body: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(POST, "https://example.com")
+        |> with_json("{\"name\": \"Alice\"}")
+
+    var has_body: bool
+    match builder.body {
+        Some(b) => { has_body = b == "{\"name\": \"Alice\"}" }
+        None => { has_body = false }
+    }
+    assert(has_body)
+    return
+}
+
+let test_with_json_sets_content_type: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(POST, "https://example.com")
+        |> with_json("{\"name\": \"Alice\"}")
+
+    var has_content_type: bool
+    match get_header(builder.headers, "Content-Type") {
+        Some(v) => { has_content_type = v == "application/json" }
+        None => { has_content_type = false }
+    }
+    assert(has_content_type)
+    return
+}
+
+// with_timeout tests
+
+let test_with_timeout_sets_timeout: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(GET, "https://example.com")
+        |> with_timeout(5000)
+
+    var has_timeout: bool
+    match builder.timeout {
+        Some(t) => { has_timeout = t == 5000 }
+        None => { has_timeout = false }
+    }
+    assert(has_timeout)
+    return
+}
+
+let test_with_timeout_replaces_existing: fn() -> void = fn() -> void {
+    let builder: RequestBuilder = new_request(GET, "https://example.com")
+        |> with_timeout(5000)
+        |> with_timeout(10000)
+
+    var has_timeout: bool
+    match builder.timeout {
+        Some(t) => { has_timeout = t == 10000 }
+        None => { has_timeout = false }
+    }
+    assert(has_timeout)
+    return
+}
+
+// build tests
+
+let test_build_sets_method: fn() -> void = fn() -> void {
+    let request: Request = new_request(GET, "https://example.com")
+        |> build()
+
+    var matches: bool
+    match request.method {
+        GET => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_build_sets_url: fn() -> void = fn() -> void {
+    let request: Request = new_request(GET, "https://example.com/path")
+        |> build()
+
+    assert(request.url == "https://example.com/path")
+    return
+}
+
+let test_build_extracts_path: fn() -> void = fn() -> void {
+    let request: Request = new_request(GET, "https://example.com/users/123")
+        |> build()
+
+    assert(request.path == "/users/123")
+    return
+}
+
+let test_build_extracts_path_with_query: fn() -> void = fn() -> void {
+    let request: Request = new_request(GET, "https://example.com/search?q=test")
+        |> build()
+
+    assert(request.path == "/search")
+    return
+}
+
+let test_build_extracts_query_params: fn() -> void = fn() -> void {
+    let request: Request = new_request(GET, "https://example.com/search?q=test&limit=10")
+        |> build()
+
+    var has_q: bool
+    match get_query_param(request, "q") {
+        Some(v) => { has_q = v == "test" }
+        None => { has_q = false }
+    }
+
+    var has_limit: bool
+    match get_query_param(request, "limit") {
+        Some(v) => { has_limit = v == "10" }
+        None => { has_limit = false }
+    }
+
+    assert(has_q and has_limit)
+    return
+}
+
+let test_build_preserves_headers: fn() -> void = fn() -> void {
+    let request: Request = new_request(GET, "https://example.com")
+        |> with_header("Authorization", "Bearer token")
+        |> build()
+
+    var has_auth: bool
+    match get_header(request.headers, "Authorization") {
+        Some(v) => { has_auth = v == "Bearer token" }
+        None => { has_auth = false }
+    }
+    assert(has_auth)
+    return
+}
+
+let test_build_preserves_body: fn() -> void = fn() -> void {
+    let request: Request = new_request(POST, "https://example.com")
+        |> with_body("body content")
+        |> build()
+
+    var has_body: bool
+    match request.body {
+        Some(b) => { has_body = b == "body content" }
+        None => { has_body = false }
+    }
+    assert(has_body)
+    return
+}
+
+let test_build_default_path: fn() -> void = fn() -> void {
+    let request: Request = new_request(GET, "https://example.com")
+        |> build()
+
+    assert(request.path == "/")
+    return
+}
+
+// get_query_param tests
+
+let test_get_query_param_existing: fn() -> void = fn() -> void {
+    let request: Request = new_request(GET, "https://example.com?name=Alice")
+        |> build()
+
+    var found: bool
+    match get_query_param(request, "name") {
+        Some(v) => { found = v == "Alice" }
+        None => { found = false }
+    }
+    assert(found)
+    return
+}
+
+let test_get_query_param_missing: fn() -> void = fn() -> void {
+    let request: Request = new_request(GET, "https://example.com?name=Alice")
+        |> build()
+
+    var not_found: bool
+    match get_query_param(request, "age") {
+        Some(_) => { not_found = false }
+        None => { not_found = true }
+    }
+    assert(not_found)
+    return
+}
+
+// get_query_params tests
+
+let test_get_query_params_multiple: fn() -> void = fn() -> void {
+    let request: Request = new_request(GET, "https://example.com?tag=a&tag=b&tag=c")
+        |> build()
+
+    let tags: List[string] = get_query_params(request, "tag")
+    let count: i32 = list_length(tags)
+    assert(count == 3)
+    return
+}
+
+let test_get_query_params_empty: fn() -> void = fn() -> void {
+    let request: Request = new_request(GET, "https://example.com")
+        |> build()
+
+    let tags: List[string] = get_query_params(request, "tag")
+    var is_empty: bool
+    match tags {
+        Nil => { is_empty = true }
+        Cons(_, _) => { is_empty = false }
+    }
+    assert(is_empty)
+    return
+}
+
+// path_param tests
+
+let test_path_param_existing: fn() -> void = fn() -> void {
+    let request: Request = new_request(GET, "https://example.com/users/123")
+        |> build()
+    let params: List[QueryParam] = Cons(
+        QueryParam { key: "id", value: "123" },
+        Nil
+    )
+    let req_with_params: Request = with_path_params(request, params)
+
+    var found: bool
+    match path_param(req_with_params, "id") {
+        Some(v) => { found = v == "123" }
+        None => { found = false }
+    }
+    assert(found)
+    return
+}
+
+let test_path_param_missing: fn() -> void = fn() -> void {
+    let request: Request = new_request(GET, "https://example.com/users/123")
+        |> build()
+
+    var not_found: bool
+    match path_param(request, "id") {
+        Some(_) => { not_found = false }
+        None => { not_found = true }
+    }
+    assert(not_found)
+    return
+}
+
+// Chaining test
+
+let test_full_builder_chain: fn() -> void = fn() -> void {
+    let request: Request = new_request(POST, "https://api.example.com/users?notify=true")
+        |> with_header("Authorization", "Bearer token123")
+        |> with_header("Accept", "application/json")
+        |> with_json("{\"name\": \"Alice\"}")
+        |> with_timeout(5000)
+        |> build()
+
+    var is_post: bool
+    match request.method {
+        POST => { is_post = true }
+        _ => { is_post = false }
+    }
+
+    var has_auth: bool
+    match get_header(request.headers, "Authorization") {
+        Some(v) => { has_auth = v == "Bearer token123" }
+        None => { has_auth = false }
+    }
+
+    var has_body: bool
+    match request.body {
+        Some(b) => { has_body = b == "{\"name\": \"Alice\"}" }
+        None => { has_body = false }
+    }
+
+    var has_notify: bool
+    match get_query_param(request, "notify") {
+        Some(v) => { has_notify = v == "true" }
+        None => { has_notify = false }
+    }
+
+    assert(is_post and has_auth and has_body and has_notify)
+    return
+}
+
+// Helper function for counting list length
+let list_length: fn(List[string]) -> i32 = fn(list: List[string]) -> i32 {
+    var count: i32
+    match list {
+        Nil => { count = 0 }
+        Cons(_, rest) => { count = 1 + list_length(rest) }
+    }
+    return count
+}

@@ -1,0 +1,574 @@
+/// Tests for kira-http response module
+///
+/// Tests response helper functions and correct status codes and headers.
+
+module http.tests.test_response
+
+use http.types.Status
+use http.types.Header
+use http.types.Headers
+use http.response.Response
+use http.response.ok
+use http.response.created
+use http.response.no_content
+use http.response.bad_request
+use http.response.unauthorized
+use http.response.forbidden
+use http.response.not_found
+use http.response.method_not_allowed
+use http.response.conflict
+use http.response.internal_error
+use http.response.service_unavailable
+use http.response.json_response
+use http.response.json_ok
+use http.response.json_created
+use http.response.redirect
+use http.response.permanent_redirect
+use http.response.with_header
+use http.response.with_body
+use http.response.with_status
+use http.headers.get_header
+use http.status.status_code
+
+// ok tests
+
+let test_ok_status: fn() -> void = fn() -> void {
+    let response: Response = ok("Hello")
+    var matches: bool
+    match response.status {
+        OK => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_ok_body: fn() -> void = fn() -> void {
+    let response: Response = ok("Hello, World!")
+    assert(response.body == "Hello, World!")
+    return
+}
+
+let test_ok_content_type: fn() -> void = fn() -> void {
+    let response: Response = ok("Hello")
+    var has_content_type: bool
+    match get_header(response.headers, "Content-Type") {
+        Some(v) => { has_content_type = v == "text/plain" }
+        None => { has_content_type = false }
+    }
+    assert(has_content_type)
+    return
+}
+
+// created tests
+
+let test_created_status: fn() -> void = fn() -> void {
+    let response: Response = created("{\"id\": 1}")
+    var matches: bool
+    match response.status {
+        Created => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_created_body: fn() -> void = fn() -> void {
+    let response: Response = created("{\"id\": 1}")
+    assert(response.body == "{\"id\": 1}")
+    return
+}
+
+let test_created_content_type: fn() -> void = fn() -> void {
+    let response: Response = created("body")
+    var has_content_type: bool
+    match get_header(response.headers, "Content-Type") {
+        Some(v) => { has_content_type = v == "text/plain" }
+        None => { has_content_type = false }
+    }
+    assert(has_content_type)
+    return
+}
+
+// no_content tests
+
+let test_no_content_status: fn() -> void = fn() -> void {
+    let response: Response = no_content()
+    var matches: bool
+    match response.status {
+        NoContent => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_no_content_empty_body: fn() -> void = fn() -> void {
+    let response: Response = no_content()
+    assert(response.body == "")
+    return
+}
+
+let test_no_content_no_headers: fn() -> void = fn() -> void {
+    let response: Response = no_content()
+    var is_empty: bool
+    match response.headers {
+        Nil => { is_empty = true }
+        Cons(_, _) => { is_empty = false }
+    }
+    assert(is_empty)
+    return
+}
+
+// bad_request tests
+
+let test_bad_request_status: fn() -> void = fn() -> void {
+    let response: Response = bad_request("Invalid input")
+    var matches: bool
+    match response.status {
+        BadRequest => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_bad_request_body: fn() -> void = fn() -> void {
+    let response: Response = bad_request("Invalid input")
+    assert(response.body == "Invalid input")
+    return
+}
+
+let test_bad_request_status_code: fn() -> void = fn() -> void {
+    let response: Response = bad_request("error")
+    assert(status_code(response.status) == 400)
+    return
+}
+
+// unauthorized tests
+
+let test_unauthorized_status: fn() -> void = fn() -> void {
+    let response: Response = unauthorized("Invalid token")
+    var matches: bool
+    match response.status {
+        Unauthorized => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_unauthorized_body: fn() -> void = fn() -> void {
+    let response: Response = unauthorized("Invalid token")
+    assert(response.body == "Invalid token")
+    return
+}
+
+let test_unauthorized_status_code: fn() -> void = fn() -> void {
+    let response: Response = unauthorized("error")
+    assert(status_code(response.status) == 401)
+    return
+}
+
+// forbidden tests
+
+let test_forbidden_status: fn() -> void = fn() -> void {
+    let response: Response = forbidden("Access denied")
+    var matches: bool
+    match response.status {
+        Forbidden => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_forbidden_body: fn() -> void = fn() -> void {
+    let response: Response = forbidden("Access denied")
+    assert(response.body == "Access denied")
+    return
+}
+
+let test_forbidden_status_code: fn() -> void = fn() -> void {
+    let response: Response = forbidden("error")
+    assert(status_code(response.status) == 403)
+    return
+}
+
+// not_found tests
+
+let test_not_found_status: fn() -> void = fn() -> void {
+    let response: Response = not_found()
+    var matches: bool
+    match response.status {
+        NotFound => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_not_found_default_body: fn() -> void = fn() -> void {
+    let response: Response = not_found()
+    assert(response.body == "Not Found")
+    return
+}
+
+let test_not_found_status_code: fn() -> void = fn() -> void {
+    let response: Response = not_found()
+    assert(status_code(response.status) == 404)
+    return
+}
+
+// method_not_allowed tests
+
+let test_method_not_allowed_status: fn() -> void = fn() -> void {
+    let response: Response = method_not_allowed()
+    var matches: bool
+    match response.status {
+        MethodNotAllowed => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_method_not_allowed_body: fn() -> void = fn() -> void {
+    let response: Response = method_not_allowed()
+    assert(response.body == "Method Not Allowed")
+    return
+}
+
+let test_method_not_allowed_status_code: fn() -> void = fn() -> void {
+    let response: Response = method_not_allowed()
+    assert(status_code(response.status) == 405)
+    return
+}
+
+// conflict tests
+
+let test_conflict_status: fn() -> void = fn() -> void {
+    let response: Response = conflict("Resource already exists")
+    var matches: bool
+    match response.status {
+        Conflict => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_conflict_body: fn() -> void = fn() -> void {
+    let response: Response = conflict("Resource already exists")
+    assert(response.body == "Resource already exists")
+    return
+}
+
+let test_conflict_status_code: fn() -> void = fn() -> void {
+    let response: Response = conflict("error")
+    assert(status_code(response.status) == 409)
+    return
+}
+
+// internal_error tests
+
+let test_internal_error_status: fn() -> void = fn() -> void {
+    let response: Response = internal_error("Database error")
+    var matches: bool
+    match response.status {
+        InternalError => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_internal_error_body: fn() -> void = fn() -> void {
+    let response: Response = internal_error("Database error")
+    assert(response.body == "Database error")
+    return
+}
+
+let test_internal_error_status_code: fn() -> void = fn() -> void {
+    let response: Response = internal_error("error")
+    assert(status_code(response.status) == 500)
+    return
+}
+
+// service_unavailable tests
+
+let test_service_unavailable_status: fn() -> void = fn() -> void {
+    let response: Response = service_unavailable("Maintenance mode")
+    var matches: bool
+    match response.status {
+        ServiceUnavailable => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_service_unavailable_body: fn() -> void = fn() -> void {
+    let response: Response = service_unavailable("Maintenance mode")
+    assert(response.body == "Maintenance mode")
+    return
+}
+
+let test_service_unavailable_status_code: fn() -> void = fn() -> void {
+    let response: Response = service_unavailable("error")
+    assert(status_code(response.status) == 503)
+    return
+}
+
+// json_response tests
+
+let test_json_response_status: fn() -> void = fn() -> void {
+    let response: Response = json_response(OK, "{}")
+    var matches: bool
+    match response.status {
+        OK => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_json_response_body: fn() -> void = fn() -> void {
+    let response: Response = json_response(OK, "{\"name\": \"Alice\"}")
+    assert(response.body == "{\"name\": \"Alice\"}")
+    return
+}
+
+let test_json_response_content_type: fn() -> void = fn() -> void {
+    let response: Response = json_response(OK, "{}")
+    var has_json_type: bool
+    match get_header(response.headers, "Content-Type") {
+        Some(v) => { has_json_type = v == "application/json" }
+        None => { has_json_type = false }
+    }
+    assert(has_json_type)
+    return
+}
+
+let test_json_response_with_error_status: fn() -> void = fn() -> void {
+    let response: Response = json_response(BadRequest, "{\"error\": \"bad\"}")
+    var matches: bool
+    match response.status {
+        BadRequest => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+// json_ok tests
+
+let test_json_ok_status: fn() -> void = fn() -> void {
+    let response: Response = json_ok("{}")
+    var matches: bool
+    match response.status {
+        OK => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_json_ok_content_type: fn() -> void = fn() -> void {
+    let response: Response = json_ok("{}")
+    var has_json_type: bool
+    match get_header(response.headers, "Content-Type") {
+        Some(v) => { has_json_type = v == "application/json" }
+        None => { has_json_type = false }
+    }
+    assert(has_json_type)
+    return
+}
+
+// json_created tests
+
+let test_json_created_status: fn() -> void = fn() -> void {
+    let response: Response = json_created("{\"id\": 1}")
+    var matches: bool
+    match response.status {
+        Created => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_json_created_content_type: fn() -> void = fn() -> void {
+    let response: Response = json_created("{}")
+    var has_json_type: bool
+    match get_header(response.headers, "Content-Type") {
+        Some(v) => { has_json_type = v == "application/json" }
+        None => { has_json_type = false }
+    }
+    assert(has_json_type)
+    return
+}
+
+// redirect tests
+
+let test_redirect_status: fn() -> void = fn() -> void {
+    let response: Response = redirect("https://example.com")
+    var matches: bool
+    match response.status {
+        Found => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_redirect_location_header: fn() -> void = fn() -> void {
+    let response: Response = redirect("https://example.com/new")
+    var has_location: bool
+    match get_header(response.headers, "Location") {
+        Some(v) => { has_location = v == "https://example.com/new" }
+        None => { has_location = false }
+    }
+    assert(has_location)
+    return
+}
+
+let test_redirect_empty_body: fn() -> void = fn() -> void {
+    let response: Response = redirect("https://example.com")
+    assert(response.body == "")
+    return
+}
+
+let test_redirect_status_code: fn() -> void = fn() -> void {
+    let response: Response = redirect("https://example.com")
+    assert(status_code(response.status) == 302)
+    return
+}
+
+// permanent_redirect tests
+
+let test_permanent_redirect_status: fn() -> void = fn() -> void {
+    let response: Response = permanent_redirect("https://example.com")
+    var matches: bool
+    match response.status {
+        MovedPermanently => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_permanent_redirect_location_header: fn() -> void = fn() -> void {
+    let response: Response = permanent_redirect("https://example.com/new")
+    var has_location: bool
+    match get_header(response.headers, "Location") {
+        Some(v) => { has_location = v == "https://example.com/new" }
+        None => { has_location = false }
+    }
+    assert(has_location)
+    return
+}
+
+let test_permanent_redirect_status_code: fn() -> void = fn() -> void {
+    let response: Response = permanent_redirect("https://example.com")
+    assert(status_code(response.status) == 301)
+    return
+}
+
+// with_header tests
+
+let test_with_header_adds_header: fn() -> void = fn() -> void {
+    let response: Response = ok("body")
+        |> with_header("X-Custom", "value")
+
+    var has_custom: bool
+    match get_header(response.headers, "X-Custom") {
+        Some(v) => { has_custom = v == "value" }
+        None => { has_custom = false }
+    }
+    assert(has_custom)
+    return
+}
+
+let test_with_header_preserves_existing: fn() -> void = fn() -> void {
+    let response: Response = ok("body")
+        |> with_header("X-Custom", "value")
+
+    var has_content_type: bool
+    match get_header(response.headers, "Content-Type") {
+        Some(v) => { has_content_type = v == "text/plain" }
+        None => { has_content_type = false }
+    }
+    assert(has_content_type)
+    return
+}
+
+// with_body tests
+
+let test_with_body_changes_body: fn() -> void = fn() -> void {
+    let response: Response = ok("original")
+        |> with_body("modified")
+
+    assert(response.body == "modified")
+    return
+}
+
+let test_with_body_preserves_status: fn() -> void = fn() -> void {
+    let response: Response = ok("original")
+        |> with_body("modified")
+
+    var matches: bool
+    match response.status {
+        OK => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+// with_status tests
+
+let test_with_status_changes_status: fn() -> void = fn() -> void {
+    let response: Response = ok("body")
+        |> with_status(Created)
+
+    var matches: bool
+    match response.status {
+        Created => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+    return
+}
+
+let test_with_status_preserves_body: fn() -> void = fn() -> void {
+    let response: Response = ok("original body")
+        |> with_status(Created)
+
+    assert(response.body == "original body")
+    return
+}
+
+// chaining tests
+
+let test_response_chaining: fn() -> void = fn() -> void {
+    let response: Response = ok("initial")
+        |> with_header("X-Request-Id", "123")
+        |> with_body("final body")
+        |> with_status(Created)
+
+    var is_created: bool
+    match response.status {
+        Created => { is_created = true }
+        _ => { is_created = false }
+    }
+
+    var has_request_id: bool
+    match get_header(response.headers, "X-Request-Id") {
+        Some(v) => { has_request_id = v == "123" }
+        None => { has_request_id = false }
+    }
+
+    assert(is_created and has_request_id and response.body == "final body")
+    return
+}

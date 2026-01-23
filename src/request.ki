@@ -1,0 +1,395 @@
+/// Request types and builder for kira-http
+///
+/// This module provides the Request type for representing HTTP requests
+/// and a RequestBuilder for constructing requests with a fluent interface.
+
+module http.request
+
+use http.types.Method
+use http.types.Header
+use http.types.Headers
+use http.types.QueryParam
+use http.headers.set_header
+use http.url.parse_query_string
+
+/// An HTTP request
+///
+/// Contains all information needed to make or handle an HTTP request.
+pub type Request = {
+    method: Method,
+    url: string,
+    path: string,
+    headers: Headers,
+    body: Option[string],
+    query: List[QueryParam],
+    path_params: List[QueryParam]
+}
+
+/// A builder for constructing HTTP requests
+///
+/// Use new_request() to create a builder, chain with_* methods to configure,
+/// and call build() to create the final Request.
+pub type RequestBuilder = {
+    method: Method,
+    url: string,
+    headers: Headers,
+    body: Option[string],
+    timeout: Option[i32]
+}
+
+/// Creates a new request builder with the given method and URL
+///
+/// # Arguments
+/// * `method` - The HTTP method for the request
+/// * `url` - The target URL for the request
+///
+/// # Returns
+/// A RequestBuilder configured with the method and URL
+///
+/// # Example
+/// ```
+/// let builder: RequestBuilder = new_request(GET, "https://example.com/api")
+/// ```
+pub let new_request: fn(Method, string) -> RequestBuilder =
+    fn(method: Method, url: string) -> RequestBuilder {
+        return RequestBuilder {
+            method: method,
+            url: url,
+            headers: Nil,
+            body: None,
+            timeout: None
+        }
+    }
+
+/// Adds a header to the request builder
+///
+/// If a header with the same name already exists, it will be replaced.
+///
+/// # Arguments
+/// * `builder` - The request builder
+/// * `name` - The header name
+/// * `value` - The header value
+///
+/// # Returns
+/// A new RequestBuilder with the header added
+///
+/// # Example
+/// ```
+/// let builder: RequestBuilder = new_request(GET, url)
+///     |> with_header("Authorization", "Bearer token")
+/// ```
+pub let with_header: fn(RequestBuilder, string, string) -> RequestBuilder =
+    fn(builder: RequestBuilder, name: string, value: string) -> RequestBuilder {
+        return RequestBuilder {
+            method: builder.method,
+            url: builder.url,
+            headers: set_header(builder.headers, name, value),
+            body: builder.body,
+            timeout: builder.timeout
+        }
+    }
+
+/// Adds multiple headers to the request builder
+///
+/// Existing headers with the same names will be replaced.
+///
+/// # Arguments
+/// * `builder` - The request builder
+/// * `headers` - The list of headers to add
+///
+/// # Returns
+/// A new RequestBuilder with all headers added
+pub let with_headers: fn(RequestBuilder, Headers) -> RequestBuilder =
+    fn(builder: RequestBuilder, headers: Headers) -> RequestBuilder {
+        let merged: Headers = merge_headers(builder.headers, headers)
+        return RequestBuilder {
+            method: builder.method,
+            url: builder.url,
+            headers: merged,
+            body: builder.body,
+            timeout: builder.timeout
+        }
+    }
+
+let merge_headers: fn(Headers, Headers) -> Headers =
+    fn(existing: Headers, new_headers: Headers) -> Headers {
+        var result: Headers
+        match new_headers {
+            Nil => { result = existing }
+            Cons(header, rest) => {
+                let updated: Headers = set_header(existing, header.name, header.value)
+                result = merge_headers(updated, rest)
+            }
+        }
+        return result
+    }
+
+/// Sets the body of the request
+///
+/// # Arguments
+/// * `builder` - The request builder
+/// * `body` - The request body as a string
+///
+/// # Returns
+/// A new RequestBuilder with the body set
+///
+/// # Example
+/// ```
+/// let builder: RequestBuilder = new_request(POST, url)
+///     |> with_body("{\"name\": \"Alice\"}")
+/// ```
+pub let with_body: fn(RequestBuilder, string) -> RequestBuilder =
+    fn(builder: RequestBuilder, body: string) -> RequestBuilder {
+        return RequestBuilder {
+            method: builder.method,
+            url: builder.url,
+            headers: builder.headers,
+            body: Some(body),
+            timeout: builder.timeout
+        }
+    }
+
+/// Sets the body as JSON and adds the Content-Type header
+///
+/// Note: This function expects the data to already be serialized to a JSON string.
+/// In a real implementation, this would use a JSON serialization library.
+///
+/// # Arguments
+/// * `builder` - The request builder
+/// * `json_data` - The JSON string to use as the body
+///
+/// # Returns
+/// A new RequestBuilder with the JSON body and Content-Type header
+///
+/// # Example
+/// ```
+/// let builder: RequestBuilder = new_request(POST, url)
+///     |> with_json("{\"name\": \"Alice\"}")
+/// ```
+pub let with_json: fn(RequestBuilder, string) -> RequestBuilder =
+    fn(builder: RequestBuilder, json_data: string) -> RequestBuilder {
+        let with_content_type: RequestBuilder = with_header(builder, "Content-Type", "application/json")
+        return with_body(with_content_type, json_data)
+    }
+
+/// Sets the timeout for the request in milliseconds
+///
+/// # Arguments
+/// * `builder` - The request builder
+/// * `ms` - The timeout in milliseconds
+///
+/// # Returns
+/// A new RequestBuilder with the timeout set
+///
+/// # Example
+/// ```
+/// let builder: RequestBuilder = new_request(GET, url)
+///     |> with_timeout(5000)
+/// ```
+pub let with_timeout: fn(RequestBuilder, i32) -> RequestBuilder =
+    fn(builder: RequestBuilder, ms: i32) -> RequestBuilder {
+        return RequestBuilder {
+            method: builder.method,
+            url: builder.url,
+            headers: builder.headers,
+            body: builder.body,
+            timeout: Some(ms)
+        }
+    }
+
+/// Builds a Request from the RequestBuilder
+///
+/// Extracts path and query parameters from the URL.
+///
+/// # Arguments
+/// * `builder` - The request builder to convert
+///
+/// # Returns
+/// A Request configured from the builder
+pub let build: fn(RequestBuilder) -> Request =
+    fn(builder: RequestBuilder) -> Request {
+        let path_and_query: PathAndQuery = extract_path_and_query(builder.url)
+        return Request {
+            method: builder.method,
+            url: builder.url,
+            path: path_and_query.path,
+            headers: builder.headers,
+            body: builder.body,
+            query: path_and_query.query,
+            path_params: Nil
+        }
+    }
+
+type PathAndQuery = {
+    path: string,
+    query: List[QueryParam]
+}
+
+let extract_path_and_query: fn(string) -> PathAndQuery =
+    fn(url: string) -> PathAndQuery {
+        // Find the start of the path (after scheme://host)
+        let scheme_end: Option[i32] = std.string.index_of(url, "://")
+        var rest: string
+
+        match scheme_end {
+            Some(idx) => {
+                rest = std.string.substring(url, idx + 3, std.string.length(url))
+            }
+            None => {
+                rest = url
+            }
+        }
+
+        // Find start of path
+        let path_start: Option[i32] = std.string.index_of(rest, "/")
+        var path_portion: string
+
+        match path_start {
+            Some(idx) => {
+                path_portion = std.string.substring(rest, idx, std.string.length(rest))
+            }
+            None => {
+                path_portion = "/"
+            }
+        }
+
+        // Split path from query
+        let query_start: Option[i32] = std.string.index_of(path_portion, "?")
+        var path: string
+        var query: List[QueryParam]
+
+        match query_start {
+            Some(idx) => {
+                path = std.string.substring(path_portion, 0, idx)
+                let query_string: string = std.string.substring(path_portion, idx + 1, std.string.length(path_portion))
+                // Remove fragment if present
+                let fragment_idx: Option[i32] = std.string.index_of(query_string, "#")
+                var clean_query: string
+                match fragment_idx {
+                    Some(fidx) => {
+                        clean_query = std.string.substring(query_string, 0, fidx)
+                    }
+                    None => {
+                        clean_query = query_string
+                    }
+                }
+                query = parse_query_string(clean_query)
+            }
+            None => {
+                // Remove fragment from path if present
+                let fragment_idx: Option[i32] = std.string.index_of(path_portion, "#")
+                match fragment_idx {
+                    Some(fidx) => {
+                        path = std.string.substring(path_portion, 0, fidx)
+                    }
+                    None => {
+                        path = path_portion
+                    }
+                }
+                query = Nil
+            }
+        }
+
+        return PathAndQuery {
+            path: path,
+            query: query
+        }
+    }
+
+/// Gets a query parameter value from a request by name
+///
+/// # Arguments
+/// * `request` - The request to search
+/// * `name` - The parameter name to find
+///
+/// # Returns
+/// Some(value) if the parameter exists, None otherwise
+pub let get_query_param: fn(Request, string) -> Option[string] =
+    fn(request: Request, name: string) -> Option[string] {
+        return find_param(request.query, name)
+    }
+
+/// Gets all values for a query parameter by name (for repeated parameters)
+///
+/// # Arguments
+/// * `request` - The request to search
+/// * `name` - The parameter name to find
+///
+/// # Returns
+/// A list of all values for the given parameter name
+pub let get_query_params: fn(Request, string) -> List[string] =
+    fn(request: Request, name: string) -> List[string] {
+        return find_all_params(request.query, name)
+    }
+
+/// Gets a path parameter value from a request by name
+///
+/// Path parameters are populated when a request is matched against a route
+/// pattern like "/users/:id".
+///
+/// # Arguments
+/// * `request` - The request to search
+/// * `name` - The parameter name to find (without the leading ":")
+///
+/// # Returns
+/// Some(value) if the parameter exists, None otherwise
+pub let path_param: fn(Request, string) -> Option[string] =
+    fn(request: Request, name: string) -> Option[string] {
+        return find_param(request.path_params, name)
+    }
+
+let find_param: fn(List[QueryParam], string) -> Option[string] =
+    fn(params: List[QueryParam], name: string) -> Option[string] {
+        var result: Option[string]
+        match params {
+            Nil => { result = None }
+            Cons(param, rest) => {
+                if param.key == name {
+                    result = Some(param.value)
+                } else {
+                    result = find_param(rest, name)
+                }
+            }
+        }
+        return result
+    }
+
+let find_all_params: fn(List[QueryParam], string) -> List[string] =
+    fn(params: List[QueryParam], name: string) -> List[string] {
+        var result: List[string]
+        match params {
+            Nil => { result = Nil }
+            Cons(param, rest) => {
+                let rest_values: List[string] = find_all_params(rest, name)
+                if param.key == name {
+                    result = Cons(param.value, rest_values)
+                } else {
+                    result = rest_values
+                }
+            }
+        }
+        return result
+    }
+
+/// Sets path parameters on a request
+///
+/// This is typically called by the router when matching a request to a route.
+///
+/// # Arguments
+/// * `request` - The request to update
+/// * `params` - The path parameters to set
+///
+/// # Returns
+/// A new Request with the path parameters set
+pub let with_path_params: fn(Request, List[QueryParam]) -> Request =
+    fn(request: Request, params: List[QueryParam]) -> Request {
+        return Request {
+            method: request.method,
+            url: request.url,
+            path: request.path,
+            headers: request.headers,
+            body: request.body,
+            query: request.query,
+            path_params: params
+        }
+    }

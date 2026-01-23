@@ -1,0 +1,339 @@
+/// Response types and helpers for kira-http
+///
+/// This module provides the Response type and helper functions for
+/// creating common HTTP responses.
+
+module http.response
+
+use http.types.Status
+use http.types.Header
+use http.types.Headers
+use http.headers.CONTENT_TYPE_JSON
+use http.headers.CONTENT_TYPE_TEXT
+
+/// An HTTP response
+///
+/// Contains the status code, headers, and body of an HTTP response.
+pub type Response = {
+    status: Status,
+    headers: Headers,
+    body: string
+}
+
+/// Creates a 200 OK response with the given body
+///
+/// # Arguments
+/// * `body` - The response body
+///
+/// # Returns
+/// A Response with status OK and Content-Type text/plain
+///
+/// # Example
+/// ```
+/// let response: Response = ok("Hello, World!")
+/// ```
+pub let ok: fn(string) -> Response = fn(body: string) -> Response {
+    return Response {
+        status: OK,
+        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        body: body
+    }
+}
+
+/// Creates a 201 Created response with the given body
+///
+/// # Arguments
+/// * `body` - The response body
+///
+/// # Returns
+/// A Response with status Created and Content-Type text/plain
+///
+/// # Example
+/// ```
+/// let response: Response = created("{\"id\": 1}")
+/// ```
+pub let created: fn(string) -> Response = fn(body: string) -> Response {
+    return Response {
+        status: Created,
+        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        body: body
+    }
+}
+
+/// Creates a 204 No Content response
+///
+/// # Returns
+/// A Response with status NoContent and empty body
+///
+/// # Example
+/// ```
+/// let response: Response = no_content()
+/// ```
+pub let no_content: fn() -> Response = fn() -> Response {
+    return Response {
+        status: NoContent,
+        headers: Nil,
+        body: ""
+    }
+}
+
+/// Creates a 400 Bad Request response with the given message
+///
+/// # Arguments
+/// * `message` - The error message
+///
+/// # Returns
+/// A Response with status BadRequest and Content-Type text/plain
+///
+/// # Example
+/// ```
+/// let response: Response = bad_request("Invalid input")
+/// ```
+pub let bad_request: fn(string) -> Response = fn(message: string) -> Response {
+    return Response {
+        status: BadRequest,
+        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        body: message
+    }
+}
+
+/// Creates a 401 Unauthorized response with an optional message
+///
+/// # Arguments
+/// * `message` - The error message
+///
+/// # Returns
+/// A Response with status Unauthorized
+pub let unauthorized: fn(string) -> Response = fn(message: string) -> Response {
+    return Response {
+        status: Unauthorized,
+        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        body: message
+    }
+}
+
+/// Creates a 403 Forbidden response with an optional message
+///
+/// # Arguments
+/// * `message` - The error message
+///
+/// # Returns
+/// A Response with status Forbidden
+pub let forbidden: fn(string) -> Response = fn(message: string) -> Response {
+    return Response {
+        status: Forbidden,
+        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        body: message
+    }
+}
+
+/// Creates a 404 Not Found response
+///
+/// # Returns
+/// A Response with status NotFound and a default message
+///
+/// # Example
+/// ```
+/// let response: Response = not_found()
+/// ```
+pub let not_found: fn() -> Response = fn() -> Response {
+    return Response {
+        status: NotFound,
+        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        body: "Not Found"
+    }
+}
+
+/// Creates a 405 Method Not Allowed response
+///
+/// # Returns
+/// A Response with status MethodNotAllowed
+pub let method_not_allowed: fn() -> Response = fn() -> Response {
+    return Response {
+        status: MethodNotAllowed,
+        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        body: "Method Not Allowed"
+    }
+}
+
+/// Creates a 409 Conflict response with the given message
+///
+/// # Arguments
+/// * `message` - The error message
+///
+/// # Returns
+/// A Response with status Conflict
+pub let conflict: fn(string) -> Response = fn(message: string) -> Response {
+    return Response {
+        status: Conflict,
+        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        body: message
+    }
+}
+
+/// Creates a 500 Internal Server Error response with the given message
+///
+/// # Arguments
+/// * `message` - The error message
+///
+/// # Returns
+/// A Response with status InternalError and Content-Type text/plain
+///
+/// # Example
+/// ```
+/// let response: Response = internal_error("Database connection failed")
+/// ```
+pub let internal_error: fn(string) -> Response = fn(message: string) -> Response {
+    return Response {
+        status: InternalError,
+        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        body: message
+    }
+}
+
+/// Creates a 503 Service Unavailable response with the given message
+///
+/// # Arguments
+/// * `message` - The error message
+///
+/// # Returns
+/// A Response with status ServiceUnavailable
+pub let service_unavailable: fn(string) -> Response = fn(message: string) -> Response {
+    return Response {
+        status: ServiceUnavailable,
+        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        body: message
+    }
+}
+
+/// Creates a JSON response with the given status and body
+///
+/// Note: This function expects the data to already be serialized to a JSON string.
+/// In a real implementation, this would use a JSON serialization library.
+///
+/// # Arguments
+/// * `status` - The HTTP status code
+/// * `json_body` - The JSON string to use as the body
+///
+/// # Returns
+/// A Response with the given status, Content-Type application/json, and body
+///
+/// # Example
+/// ```
+/// let response: Response = json_response(OK, "{\"name\": \"Alice\"}")
+/// ```
+pub let json_response: fn(Status, string) -> Response =
+    fn(status: Status, json_body: string) -> Response {
+        return Response {
+            status: status,
+            headers: Cons(CONTENT_TYPE_JSON, Nil),
+            body: json_body
+        }
+    }
+
+/// Creates a JSON 200 OK response
+///
+/// # Arguments
+/// * `json_body` - The JSON string to use as the body
+///
+/// # Returns
+/// A Response with status OK and Content-Type application/json
+pub let json_ok: fn(string) -> Response = fn(json_body: string) -> Response {
+    return json_response(OK, json_body)
+}
+
+/// Creates a JSON 201 Created response
+///
+/// # Arguments
+/// * `json_body` - The JSON string to use as the body
+///
+/// # Returns
+/// A Response with status Created and Content-Type application/json
+pub let json_created: fn(string) -> Response = fn(json_body: string) -> Response {
+    return json_response(Created, json_body)
+}
+
+/// Creates a redirect response
+///
+/// # Arguments
+/// * `location` - The URL to redirect to
+///
+/// # Returns
+/// A Response with status Found and Location header
+pub let redirect: fn(string) -> Response = fn(location: string) -> Response {
+    let location_header: Header = Header { name: "Location", value: location }
+    return Response {
+        status: Found,
+        headers: Cons(location_header, Nil),
+        body: ""
+    }
+}
+
+/// Creates a permanent redirect response
+///
+/// # Arguments
+/// * `location` - The URL to redirect to
+///
+/// # Returns
+/// A Response with status MovedPermanently and Location header
+pub let permanent_redirect: fn(string) -> Response = fn(location: string) -> Response {
+    let location_header: Header = Header { name: "Location", value: location }
+    return Response {
+        status: MovedPermanently,
+        headers: Cons(location_header, Nil),
+        body: ""
+    }
+}
+
+/// Adds a header to a response
+///
+/// # Arguments
+/// * `response` - The response to modify
+/// * `name` - The header name
+/// * `value` - The header value
+///
+/// # Returns
+/// A new Response with the header added
+pub let with_header: fn(Response, string, string) -> Response =
+    fn(response: Response, name: string, value: string) -> Response {
+        let new_header: Header = Header { name: name, value: value }
+        return Response {
+            status: response.status,
+            headers: Cons(new_header, response.headers),
+            body: response.body
+        }
+    }
+
+/// Sets the body of a response
+///
+/// # Arguments
+/// * `response` - The response to modify
+/// * `body` - The new body
+///
+/// # Returns
+/// A new Response with the body replaced
+pub let with_body: fn(Response, string) -> Response =
+    fn(response: Response, body: string) -> Response {
+        return Response {
+            status: response.status,
+            headers: response.headers,
+            body: body
+        }
+    }
+
+/// Sets the status of a response
+///
+/// # Arguments
+/// * `response` - The response to modify
+/// * `status` - The new status
+///
+/// # Returns
+/// A new Response with the status replaced
+pub let with_status: fn(Response, Status) -> Response =
+    fn(response: Response, status: Status) -> Response {
+        return Response {
+            status: status,
+            headers: response.headers,
+            body: response.body
+        }
+    }
