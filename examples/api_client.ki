@@ -1,0 +1,352 @@
+/// REST API Client Example
+///
+/// Demonstrates building a REST API client using the kira-http library.
+/// This example shows CRUD operations, JSON handling, and error handling.
+
+use http
+use json
+use std.io
+use std.result
+
+// ============================================================================
+// Types
+// ============================================================================
+
+/// A user resource from the API
+type User = {
+    id: i64,
+    name: string,
+    email: string
+}
+
+/// A new user to create (no ID yet)
+type NewUser = {
+    name: string,
+    email: string
+}
+
+/// Application-specific errors
+type ApiError =
+    | NetworkError(http.HttpError)
+    | NotFound
+    | Unauthorized
+    | ValidationError(string)
+    | ParseError(string)
+    | ServerError(i32)
+
+// ============================================================================
+// API Client
+// ============================================================================
+
+let API_BASE_URL: string = "https://api.example.com"
+
+/// Gets the Authorization header value
+fn auth_header(token: string) -> string {
+    return "Bearer {token}"
+}
+
+/// Fetches a user by ID
+effect fn get_user(token: string, user_id: i64) -> IO[Result[User, ApiError]] {
+    let url: string = "{API_BASE_URL}/users/{user_id}"
+
+    let result: Result[http.Response, http.HttpError] =
+        http.new_request(http.Method.GET, url)
+        |> http.with_header("Authorization", auth_header(token))
+        |> http.with_header("Accept", "application/json")
+        |> http.send()
+
+    match result {
+        Ok(response) => {
+            match response.status {
+                http.Status.OK => {
+                    let parsed: Result[User, json.JsonError] = json.parse[User](response.body)
+                    match parsed {
+                        Ok(user) => { return Ok(user) }
+                        Err(e) => { return Err(ApiError.ParseError(json.error_message(e))) }
+                    }
+                }
+                http.Status.NotFound => {
+                    return Err(ApiError.NotFound)
+                }
+                http.Status.Unauthorized => {
+                    return Err(ApiError.Unauthorized)
+                }
+                _ => {
+                    return Err(ApiError.ServerError(http.status_code(response.status)))
+                }
+            }
+        }
+        Err(e) => {
+            return Err(ApiError.NetworkError(e))
+        }
+    }
+}
+
+/// Fetches all users with pagination
+effect fn list_users(token: string, page: i32, per_page: i32) -> IO[Result[List[User], ApiError]] {
+    let url: string = "{API_BASE_URL}/users?page={page}&per_page={per_page}"
+
+    let result: Result[http.Response, http.HttpError] =
+        http.new_request(http.Method.GET, url)
+        |> http.with_header("Authorization", auth_header(token))
+        |> http.with_header("Accept", "application/json")
+        |> http.send()
+
+    match result {
+        Ok(response) => {
+            match response.status {
+                http.Status.OK => {
+                    let parsed: Result[List[User], json.JsonError] = json.parse[List[User]](response.body)
+                    match parsed {
+                        Ok(users) => { return Ok(users) }
+                        Err(e) => { return Err(ApiError.ParseError(json.error_message(e))) }
+                    }
+                }
+                http.Status.Unauthorized => {
+                    return Err(ApiError.Unauthorized)
+                }
+                _ => {
+                    return Err(ApiError.ServerError(http.status_code(response.status)))
+                }
+            }
+        }
+        Err(e) => {
+            return Err(ApiError.NetworkError(e))
+        }
+    }
+}
+
+/// Creates a new user
+effect fn create_user(token: string, new_user: NewUser) -> IO[Result[User, ApiError]] {
+    let url: string = "{API_BASE_URL}/users"
+    let body: string = json.stringify(new_user)
+
+    let result: Result[http.Response, http.HttpError] =
+        http.new_request(http.Method.POST, url)
+        |> http.with_header("Authorization", auth_header(token))
+        |> http.with_header("Content-Type", "application/json")
+        |> http.with_header("Accept", "application/json")
+        |> http.with_body(body)
+        |> http.send()
+
+    match result {
+        Ok(response) => {
+            match response.status {
+                http.Status.Created => {
+                    let parsed: Result[User, json.JsonError] = json.parse[User](response.body)
+                    match parsed {
+                        Ok(user) => { return Ok(user) }
+                        Err(e) => { return Err(ApiError.ParseError(json.error_message(e))) }
+                    }
+                }
+                http.Status.BadRequest => {
+                    return Err(ApiError.ValidationError(response.body))
+                }
+                http.Status.Unauthorized => {
+                    return Err(ApiError.Unauthorized)
+                }
+                _ => {
+                    return Err(ApiError.ServerError(http.status_code(response.status)))
+                }
+            }
+        }
+        Err(e) => {
+            return Err(ApiError.NetworkError(e))
+        }
+    }
+}
+
+/// Updates an existing user
+effect fn update_user(token: string, user: User) -> IO[Result[User, ApiError]] {
+    let url: string = "{API_BASE_URL}/users/{user.id}"
+    let body: string = json.stringify(user)
+
+    let result: Result[http.Response, http.HttpError] =
+        http.new_request(http.Method.PUT, url)
+        |> http.with_header("Authorization", auth_header(token))
+        |> http.with_header("Content-Type", "application/json")
+        |> http.with_header("Accept", "application/json")
+        |> http.with_body(body)
+        |> http.send()
+
+    match result {
+        Ok(response) => {
+            match response.status {
+                http.Status.OK => {
+                    let parsed: Result[User, json.JsonError] = json.parse[User](response.body)
+                    match parsed {
+                        Ok(updated) => { return Ok(updated) }
+                        Err(e) => { return Err(ApiError.ParseError(json.error_message(e))) }
+                    }
+                }
+                http.Status.NotFound => {
+                    return Err(ApiError.NotFound)
+                }
+                http.Status.BadRequest => {
+                    return Err(ApiError.ValidationError(response.body))
+                }
+                http.Status.Unauthorized => {
+                    return Err(ApiError.Unauthorized)
+                }
+                _ => {
+                    return Err(ApiError.ServerError(http.status_code(response.status)))
+                }
+            }
+        }
+        Err(e) => {
+            return Err(ApiError.NetworkError(e))
+        }
+    }
+}
+
+/// Deletes a user by ID
+effect fn delete_user(token: string, user_id: i64) -> IO[Result[void, ApiError]] {
+    let url: string = "{API_BASE_URL}/users/{user_id}"
+
+    let result: Result[http.Response, http.HttpError] =
+        http.new_request(http.Method.DELETE, url)
+        |> http.with_header("Authorization", auth_header(token))
+        |> http.send()
+
+    match result {
+        Ok(response) => {
+            match response.status {
+                http.Status.NoContent => {
+                    return Ok(void)
+                }
+                http.Status.OK => {
+                    return Ok(void)
+                }
+                http.Status.NotFound => {
+                    return Err(ApiError.NotFound)
+                }
+                http.Status.Unauthorized => {
+                    return Err(ApiError.Unauthorized)
+                }
+                _ => {
+                    return Err(ApiError.ServerError(http.status_code(response.status)))
+                }
+            }
+        }
+        Err(e) => {
+            return Err(ApiError.NetworkError(e))
+        }
+    }
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Prints an API error
+effect fn print_error(error: ApiError) -> IO[void] {
+    match error {
+        ApiError.NetworkError(e) => {
+            std.io.println("Network error occurred")
+            return
+        }
+        ApiError.NotFound => {
+            std.io.println("Resource not found")
+            return
+        }
+        ApiError.Unauthorized => {
+            std.io.println("Unauthorized - check your token")
+            return
+        }
+        ApiError.ValidationError(msg) => {
+            std.io.println("Validation error: {msg}")
+            return
+        }
+        ApiError.ParseError(msg) => {
+            std.io.println("Failed to parse response: {msg}")
+            return
+        }
+        ApiError.ServerError(code) => {
+            std.io.println("Server error: {code}")
+            return
+        }
+    }
+}
+
+/// Prints a user
+effect fn print_user(user: User) -> IO[void] {
+    std.io.println("  ID: {user.id}")
+    std.io.println("  Name: {user.name}")
+    std.io.println("  Email: {user.email}")
+    return
+}
+
+// ============================================================================
+// Main
+// ============================================================================
+
+/// Entry point demonstrating the API client
+effect fn main() -> IO[void] {
+    std.io.println("=== kira-http API Client Example ===")
+    std.io.println("")
+
+    let token: string = "your-api-token-here"
+
+    // Create a new user
+    std.io.println("--- Creating User ---")
+    let new_user: NewUser = NewUser {
+        name: "Alice Smith",
+        email: "alice@example.com"
+    }
+
+    let create_result: Result[User, ApiError] = create_user(token, new_user)
+    match create_result {
+        Ok(user) => {
+            std.io.println("Created user:")
+            print_user(user)
+            std.io.println("")
+
+            // Update the user
+            std.io.println("--- Updating User ---")
+            let updated: User = User {
+                id: user.id,
+                name: "Alice Johnson",
+                email: "alice.johnson@example.com"
+            }
+
+            let update_result: Result[User, ApiError] = update_user(token, updated)
+            match update_result {
+                Ok(u) => {
+                    std.io.println("Updated user:")
+                    print_user(u)
+                    return
+                }
+                Err(e) => {
+                    print_error(e)
+                    return
+                }
+            }
+        }
+        Err(e) => {
+            print_error(e)
+            return
+        }
+    }
+
+    // List users
+    std.io.println("")
+    std.io.println("--- Listing Users ---")
+    let list_result: Result[List[User], ApiError] = list_users(token, 1, 10)
+    match list_result {
+        Ok(users) => {
+            std.io.println("Found {std.list.length(users)} users:")
+            for user in users {
+                print_user(user)
+                std.io.println("")
+            }
+            return
+        }
+        Err(e) => {
+            print_error(e)
+            return
+        }
+    }
+
+    std.io.println("=== Done ===")
+    return
+}

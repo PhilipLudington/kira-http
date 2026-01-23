@@ -1,0 +1,106 @@
+/// Simple GET Request Example
+///
+/// Demonstrates making basic HTTP GET requests using the kira-http library.
+/// This example fetches data from a URL and displays the response.
+
+use http
+use std.io
+use std.result
+
+/// Fetches data from a URL and prints the response
+effect fn fetch_and_print(url: string) -> IO[void] {
+    std.io.println("Fetching: {url}")
+    std.io.println("")
+
+    let result: Result[http.Response, http.HttpError] = http.get(url)
+
+    match result {
+        Ok(response) => {
+            std.io.println("Status: {http.status_code(response.status)}")
+            std.io.println("Body length: {std.string.length(response.body)} bytes")
+            std.io.println("")
+
+            // Print first 500 characters of body
+            let preview: string = std.string.substring(response.body, 0, 500)
+            std.io.println("Response preview:")
+            std.io.println(preview)
+
+            if std.string.length(response.body) > 500 {
+                std.io.println("...")
+            }
+            return
+        }
+        Err(error) => {
+            match error {
+                http.HttpError.ConnectionFailed(msg) => {
+                    std.io.println("Connection failed: {msg}")
+                    return
+                }
+                http.HttpError.Timeout => {
+                    std.io.println("Request timed out")
+                    return
+                }
+                http.HttpError.InvalidUrl(msg) => {
+                    std.io.println("Invalid URL: {msg}")
+                    return
+                }
+                http.HttpError.InvalidResponse(msg) => {
+                    std.io.println("Invalid response: {msg}")
+                    return
+                }
+                http.HttpError.TlsError(msg) => {
+                    std.io.println("TLS error: {msg}")
+                    return
+                }
+            }
+        }
+    }
+}
+
+/// Makes a GET request with custom headers
+effect fn fetch_with_headers(url: string) -> IO[void] {
+    std.io.println("Fetching with custom headers: {url}")
+    std.io.println("")
+
+    let result: Result[http.Response, http.HttpError] =
+        http.new_request(http.Method.GET, url)
+        |> http.with_header("Accept", "application/json")
+        |> http.with_header("User-Agent", "kira-http/1.0")
+        |> http.send()
+
+    match result {
+        Ok(response) => {
+            std.io.println("Status: {http.status_code(response.status)}")
+
+            // Print response headers
+            std.io.println("Response headers:")
+            for header in response.headers {
+                std.io.println("  {header.name}: {header.value}")
+            }
+            return
+        }
+        Err(error) => {
+            std.io.println("Request failed")
+            return
+        }
+    }
+}
+
+/// Entry point
+effect fn main() -> IO[void] {
+    std.io.println("=== kira-http Simple GET Example ===")
+    std.io.println("")
+
+    // Example 1: Simple GET request
+    std.io.println("--- Example 1: Simple GET ---")
+    fetch_and_print("https://httpbin.org/get")
+    std.io.println("")
+
+    // Example 2: GET with custom headers
+    std.io.println("--- Example 2: GET with Headers ---")
+    fetch_with_headers("https://httpbin.org/headers")
+    std.io.println("")
+
+    std.io.println("=== Done ===")
+    return
+}

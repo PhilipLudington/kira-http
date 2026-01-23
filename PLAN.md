@@ -172,16 +172,16 @@ Main exports and public API.
 Working examples demonstrating library usage.
 
 ### 9.1 Create `examples/simple_get.ki`
-- [ ] Basic GET request example
+- [x] Basic GET request example
 
 ### 9.2 Create `examples/api_client.ki`
-- [ ] REST API client with JSON parsing
+- [x] REST API client with JSON parsing
 
 ### 9.3 Create `examples/hello_server.ki`
-- [ ] Simple "Hello World" server
+- [x] Simple "Hello World" server
 
 ### 9.4 Create `examples/rest_api.ki`
-- [ ] Full REST API server with CRUD operations
+- [x] Full REST API server with CRUD operations
 
 ## Phase 10: Documentation
 
