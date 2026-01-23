@@ -11,6 +11,8 @@ use http.request.Request
 use http.request.with_path_params
 use http.response.Response
 use http.response.not_found
+use http.middleware.Middleware
+use http.middleware.apply_all_middleware
 
 /// A request handler function
 ///
@@ -26,11 +28,12 @@ pub type Route =
 
 /// A router that matches requests to handlers
 ///
-/// The router maintains a list of routes and a fallback handler
-/// for unmatched requests.
+/// The router maintains a list of routes, middleware stack, and a fallback
+/// handler for unmatched requests.
 pub type Router = {
     routes: List[Route],
-    not_found_handler: Handler
+    not_found_handler: Handler,
+    middleware: List[Middleware]
 }
 
 /// Creates a new router with default settings
@@ -47,7 +50,8 @@ pub type Router = {
 pub let new_router: fn() -> Router = fn() -> Router {
     return Router {
         routes: Nil,
-        not_found_handler: default_not_found_handler
+        not_found_handler: default_not_found_handler,
+        middleware: Nil
     }
 }
 
@@ -76,7 +80,8 @@ pub let add_route: fn(Router, Route) -> Router =
     fn(router: Router, route: Route) -> Router {
         return Router {
             routes: append_route(router.routes, route),
-            not_found_handler: router.not_found_handler
+            not_found_handler: router.not_found_handler,
+            middleware: router.middleware
         }
     }
 
@@ -141,8 +146,47 @@ pub let set_not_found: fn(Router, Handler) -> Router =
     fn(router: Router, handler: Handler) -> Router {
         return Router {
             routes: router.routes,
-            not_found_handler: handler
+            not_found_handler: handler,
+            middleware: router.middleware
         }
+    }
+
+/// Adds middleware to the router
+///
+/// Middleware are applied in the order they are added. The first middleware
+/// added wraps all subsequent middleware and handlers.
+///
+/// # Arguments
+/// * `router` - The router to modify
+/// * `mw` - The middleware to add
+///
+/// # Returns
+/// A new Router with the middleware added
+///
+/// # Example
+/// ```
+/// let router: Router = new_router()
+///     |> use_middleware(logging())
+///     |> use_middleware(cors(["*"]))
+///     |> add_route(get("/", home_handler))
+/// ```
+pub let use_middleware: fn(Router, Middleware) -> Router =
+    fn(router: Router, mw: Middleware) -> Router {
+        return Router {
+            routes: router.routes,
+            not_found_handler: router.not_found_handler,
+            middleware: append_middleware(router.middleware, mw)
+        }
+    }
+
+let append_middleware: fn(List[Middleware], Middleware) -> List[Middleware] =
+    fn(middlewares: List[Middleware], mw: Middleware) -> List[Middleware] {
+        var result: List[Middleware]
+        match middlewares {
+            Nil => { result = Cons(mw, Nil) }
+            Cons(head, tail) => { result = Cons(head, append_middleware(tail, mw)) }
+        }
+        return result
     }
 
 /// Creates a GET route
@@ -266,7 +310,8 @@ pub let route: fn(Method, string, Handler) -> Route =
 ///
 /// Iterates through routes in order, returning the response from
 /// the first matching handler. If no route matches, the not-found
-/// handler is called.
+/// handler is called. All configured middleware are applied to
+/// the matched handler.
 ///
 /// # Arguments
 /// * `router` - The router to match against
@@ -282,17 +327,23 @@ pub let route: fn(Method, string, Handler) -> Route =
 pub let handle_request: fn(Router, Request) -> Response =
     fn(router: Router, request: Request) -> Response {
         let match_result: Option[MatchResult] = find_matching_route(router.routes, request)
-        var response: Response
+        var base_handler: Handler
+        var updated_request: Request
+
         match match_result {
             Some(result) => {
-                let updated_request: Request = with_path_params(request, result.params)
-                response = result.handler(updated_request)
+                base_handler = result.handler
+                updated_request = with_path_params(request, result.params)
             }
             None => {
-                response = router.not_found_handler(request)
+                base_handler = router.not_found_handler
+                updated_request = request
             }
         }
-        return response
+
+        // Apply middleware to the handler
+        let wrapped_handler: Handler = apply_all_middleware(base_handler, router.middleware)
+        return wrapped_handler(updated_request)
     }
 
 type MatchResult = {

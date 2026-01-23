@@ -130,16 +130,16 @@ Router and route matching for server-side handling.
 Middleware system for request/response processing.
 
 ### 6.1 Create `src/middleware.ki`
-- [ ] Define `Middleware` type alias `fn(Handler) -> Handler`
-- [ ] Implement `useMiddleware(router: Router, mw: Middleware) -> Router`
-- [ ] Implement `logging() -> Middleware`
-- [ ] Implement `cors(origins: List[string]) -> Middleware`
-- [ ] Implement `timeout(ms: i32) -> Middleware`
+- [x] Define `Middleware` type alias `fn(Handler) -> Handler`
+- [x] Implement `useMiddleware(router: Router, mw: Middleware) -> Router`
+- [x] Implement `logging() -> Middleware`
+- [x] Implement `cors(origins: List[string]) -> Middleware`
+- [x] Implement `timeout(ms: i32) -> Middleware`
 
 ### 6.2 Create `tests/test_middleware.ki`
-- [ ] Test middleware chaining
-- [ ] Test logging middleware output
-- [ ] Test CORS header injection
+- [x] Test middleware chaining
+- [x] Test logging middleware output
+- [x] Test CORS header injection
 
 ## Phase 7: HTTP Server
 

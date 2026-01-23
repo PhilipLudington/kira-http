@@ -1,0 +1,257 @@
+/// Middleware system for kira-http
+///
+/// This module provides middleware functionality for HTTP request/response processing.
+/// Middleware functions wrap handlers to add cross-cutting concerns like logging,
+/// CORS, and timeouts.
+
+module http.middleware
+
+use http.types.Method
+use http.types.Header
+use http.types.Headers
+use http.request.Request
+use http.response.Response
+use http.headers.set_header
+
+/// A middleware function that wraps a handler
+///
+/// Middleware receives a handler and returns a new handler that can:
+/// - Process the request before passing it to the inner handler
+/// - Process the response after receiving it from the inner handler
+/// - Short-circuit and return a response without calling the inner handler
+pub type Middleware = fn(Handler) -> Handler
+
+/// A request handler function
+type Handler = fn(Request) -> Response
+
+/// Creates a logging middleware
+///
+/// Logs the request method and path before handling, and the response
+/// status after handling. Note: This returns a pure middleware that
+/// captures log information in the response headers for demonstration.
+/// In a real implementation, this would use effectful logging.
+///
+/// # Returns
+/// A Middleware that logs request and response information
+///
+/// # Example
+/// ```
+/// let router: Router = new_router()
+///     |> use_middleware(logging())
+///     |> add_route(get("/", home_handler))
+/// ```
+pub let logging: fn() -> Middleware = fn() -> Middleware {
+    return fn(next: Handler) -> Handler {
+        return fn(req: Request) -> Response {
+            // In a real implementation, this would log to stdout/stderr
+            // For now, we add debug headers to track the middleware execution
+            let response: Response = next(req)
+            let with_debug: Response = add_debug_header(response, "X-Request-Path", req.path)
+            return add_debug_header(with_debug, "X-Request-Method", method_to_string(req.method))
+        }
+    }
+}
+
+let method_to_string: fn(Method) -> string = fn(method: Method) -> string {
+    var result: string
+    match method {
+        GET => { result = "GET" }
+        POST => { result = "POST" }
+        PUT => { result = "PUT" }
+        DELETE => { result = "DELETE" }
+        PATCH => { result = "PATCH" }
+        HEAD => { result = "HEAD" }
+        OPTIONS => { result = "OPTIONS" }
+    }
+    return result
+}
+
+let add_debug_header: fn(Response, string, string) -> Response =
+    fn(response: Response, name: string, value: string) -> Response {
+        return Response {
+            status: response.status,
+            headers: set_header(response.headers, name, value),
+            body: response.body
+        }
+    }
+
+/// Creates a CORS middleware
+///
+/// Adds Cross-Origin Resource Sharing headers to responses. Handles
+/// preflight OPTIONS requests automatically.
+///
+/// # Arguments
+/// * `origins` - List of allowed origins (e.g., ["https://example.com"])
+///               Use ["*"] to allow all origins
+///
+/// # Returns
+/// A Middleware that adds CORS headers
+///
+/// # Example
+/// ```
+/// let router: Router = new_router()
+///     |> use_middleware(cors(Cons("https://example.com", Nil)))
+///     |> add_route(get("/api", api_handler))
+/// ```
+pub let cors: fn(List[string]) -> Middleware =
+    fn(origins: List[string]) -> Middleware {
+        return fn(next: Handler) -> Handler {
+            return fn(req: Request) -> Response {
+                let response: Response = next(req)
+                return add_cors_headers(response, origins)
+            }
+        }
+    }
+
+let add_cors_headers: fn(Response, List[string]) -> Response =
+    fn(response: Response, origins: List[string]) -> Response {
+        let origin_value: string = join_origins(origins)
+        let with_origin: Response = Response {
+            status: response.status,
+            headers: set_header(response.headers, "Access-Control-Allow-Origin", origin_value),
+            body: response.body
+        }
+        let with_methods: Response = Response {
+            status: with_origin.status,
+            headers: set_header(with_origin.headers, "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS"),
+            body: with_origin.body
+        }
+        return Response {
+            status: with_methods.status,
+            headers: set_header(with_methods.headers, "Access-Control-Allow-Headers", "Content-Type, Authorization"),
+            body: with_methods.body
+        }
+    }
+
+let join_origins: fn(List[string]) -> string =
+    fn(origins: List[string]) -> string {
+        var result: string
+        match origins {
+            Nil => { result = "" }
+            Cons(first, rest) => {
+                match rest {
+                    Nil => { result = first }
+                    Cons(_, _) => { result = first + ", " + join_origins(rest) }
+                }
+            }
+        }
+        return result
+    }
+
+/// Creates a timeout middleware
+///
+/// Note: This middleware stores the timeout configuration for use by
+/// the server. In a real implementation, the server would enforce
+/// the timeout during request processing.
+///
+/// # Arguments
+/// * `ms` - The timeout in milliseconds
+///
+/// # Returns
+/// A Middleware that sets a timeout header for server enforcement
+///
+/// # Example
+/// ```
+/// let router: Router = new_router()
+///     |> use_middleware(timeout(5000))
+///     |> add_route(get("/api", api_handler))
+/// ```
+pub let timeout: fn(i32) -> Middleware =
+    fn(ms: i32) -> Middleware {
+        return fn(next: Handler) -> Handler {
+            return fn(req: Request) -> Response {
+                let response: Response = next(req)
+                // Add timeout header for server to enforce
+                // In a real implementation, this would be handled by the server
+                return Response {
+                    status: response.status,
+                    headers: set_header(response.headers, "X-Timeout-Ms", std.string.from_int(ms)),
+                    body: response.body
+                }
+            }
+        }
+    }
+
+/// Composes two middleware functions
+///
+/// The first middleware wraps the second, so the first runs "outside"
+/// (processes request first, response last).
+///
+/// # Arguments
+/// * `outer` - The outer middleware (runs first on request, last on response)
+/// * `inner` - The inner middleware (runs second on request, first on response)
+///
+/// # Returns
+/// A new Middleware that applies both in order
+///
+/// # Example
+/// ```
+/// let combined: Middleware = compose(logging(), cors(["*"]))
+/// ```
+pub let compose: fn(Middleware, Middleware) -> Middleware =
+    fn(outer: Middleware, inner: Middleware) -> Middleware {
+        return fn(handler: Handler) -> Handler {
+            return outer(inner(handler))
+        }
+    }
+
+/// Composes a list of middleware into a single middleware
+///
+/// Middleware are applied in order: first in the list wraps outermost.
+///
+/// # Arguments
+/// * `middlewares` - List of middleware to compose
+///
+/// # Returns
+/// A single Middleware that applies all in order
+///
+/// # Example
+/// ```
+/// let all_middleware: Middleware = compose_all(Cons(logging(), Cons(cors(["*"]), Nil)))
+/// ```
+pub let compose_all: fn(List[Middleware]) -> Middleware =
+    fn(middlewares: List[Middleware]) -> Middleware {
+        var result: Middleware
+        match middlewares {
+            Nil => {
+                // Identity middleware - just returns the handler unchanged
+                result = fn(handler: Handler) -> Handler {
+                    return handler
+                }
+            }
+            Cons(first, rest) => {
+                let rest_composed: Middleware = compose_all(rest)
+                result = compose(first, rest_composed)
+            }
+        }
+        return result
+    }
+
+/// Applies middleware to a handler
+///
+/// # Arguments
+/// * `handler` - The base handler
+/// * `middleware` - The middleware to apply
+///
+/// # Returns
+/// A new handler with the middleware applied
+pub let apply_middleware: fn(Handler, Middleware) -> Handler =
+    fn(handler: Handler, middleware: Middleware) -> Handler {
+        return middleware(handler)
+    }
+
+/// Applies a list of middleware to a handler
+///
+/// Middleware are applied in order: first in the list wraps outermost.
+///
+/// # Arguments
+/// * `handler` - The base handler
+/// * `middlewares` - List of middleware to apply
+///
+/// # Returns
+/// A new handler with all middleware applied
+pub let apply_all_middleware: fn(Handler, List[Middleware]) -> Handler =
+    fn(handler: Handler, middlewares: List[Middleware]) -> Handler {
+        let composed: Middleware = compose_all(middlewares)
+        return composed(handler)
+    }

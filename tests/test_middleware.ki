@@ -1,0 +1,483 @@
+/// Tests for the middleware module
+///
+/// Tests middleware chaining, logging middleware output, and CORS header injection.
+
+module tests.test_middleware
+
+use http.types.Method
+use http.types.Status
+use http.request.Request
+use http.response.Response
+use http.response.ok
+use http.headers.get_header
+use http.middleware.Middleware
+use http.middleware.logging
+use http.middleware.cors
+use http.middleware.timeout
+use http.middleware.compose
+use http.middleware.compose_all
+use http.middleware.apply_middleware
+use http.middleware.apply_all_middleware
+use http.router.Handler
+use http.router.Router
+use http.router.new_router
+use http.router.add_route
+use http.router.use_middleware
+use http.router.get
+use http.router.handle_request
+
+// Test handlers
+let echo_handler: Handler = fn(req: Request) -> Response {
+    return ok("echo: " + req.path)
+}
+
+let hello_handler: Handler = fn(req: Request) -> Response {
+    return ok("hello")
+}
+
+// Helper to create a test request
+let make_request: fn(Method, string) -> Request =
+    fn(method: Method, path: string) -> Request {
+        return Request {
+            method: method,
+            url: "http://localhost" + path,
+            path: path,
+            headers: Nil,
+            body: None,
+            query: Nil,
+            path_params: Nil
+        }
+    }
+
+// ============================================================================
+// Tests: Basic middleware application
+// ============================================================================
+
+let test_apply_single_middleware: fn() -> void = fn() -> void {
+    let mw: Middleware = logging()
+    let wrapped: Handler = apply_middleware(hello_handler, mw)
+
+    let request: Request = make_request(GET, "/test")
+    let response: Response = wrapped(request)
+
+    assert(response.body == "hello", "Handler should still return original body")
+
+    // Logging middleware adds debug headers
+    let path_header: Option[string] = get_header(response.headers, "X-Request-Path")
+    var has_path_header: bool
+    match path_header {
+        Some(_) => { has_path_header = true }
+        None => { has_path_header = false }
+    }
+    assert(has_path_header, "Logging middleware should add X-Request-Path header")
+    return
+}
+
+let test_apply_middleware_does_not_modify_body: fn() -> void = fn() -> void {
+    let mw: Middleware = cors(Cons("*", Nil))
+    let wrapped: Handler = apply_middleware(hello_handler, mw)
+
+    let request: Request = make_request(GET, "/test")
+    let response: Response = wrapped(request)
+
+    assert(response.body == "hello", "CORS middleware should not modify body")
+    return
+}
+
+// ============================================================================
+// Tests: Middleware chaining
+// ============================================================================
+
+let test_compose_two_middleware: fn() -> void = fn() -> void {
+    let mw1: Middleware = logging()
+    let mw2: Middleware = cors(Cons("https://example.com", Nil))
+    let combined: Middleware = compose(mw1, mw2)
+
+    let wrapped: Handler = combined(hello_handler)
+    let request: Request = make_request(GET, "/api")
+    let response: Response = wrapped(request)
+
+    // Should have headers from both middleware
+    let path_header: Option[string] = get_header(response.headers, "X-Request-Path")
+    let cors_header: Option[string] = get_header(response.headers, "Access-Control-Allow-Origin")
+
+    var has_both: bool = false
+    match (path_header, cors_header) {
+        (Some(_), Some(_)) => { has_both = true }
+        _ => { has_both = false }
+    }
+    assert(has_both, "Composed middleware should apply both")
+    return
+}
+
+let test_compose_all_empty_list: fn() -> void = fn() -> void {
+    let middlewares: List[Middleware] = Nil
+    let combined: Middleware = compose_all(middlewares)
+
+    let wrapped: Handler = combined(hello_handler)
+    let request: Request = make_request(GET, "/test")
+    let response: Response = wrapped(request)
+
+    assert(response.body == "hello", "Empty middleware list should pass through unchanged")
+    return
+}
+
+let test_compose_all_single: fn() -> void = fn() -> void {
+    let middlewares: List[Middleware] = Cons(logging(), Nil)
+    let combined: Middleware = compose_all(middlewares)
+
+    let wrapped: Handler = combined(hello_handler)
+    let request: Request = make_request(GET, "/test")
+    let response: Response = wrapped(request)
+
+    let path_header: Option[string] = get_header(response.headers, "X-Request-Path")
+    var has_header: bool
+    match path_header {
+        Some(_) => { has_header = true }
+        None => { has_header = false }
+    }
+    assert(has_header, "Single middleware in list should be applied")
+    return
+}
+
+let test_compose_all_multiple: fn() -> void = fn() -> void {
+    let middlewares: List[Middleware] = Cons(
+        logging(),
+        Cons(
+            cors(Cons("*", Nil)),
+            Cons(
+                timeout(5000),
+                Nil
+            )
+        )
+    )
+    let combined: Middleware = compose_all(middlewares)
+
+    let wrapped: Handler = combined(hello_handler)
+    let request: Request = make_request(GET, "/test")
+    let response: Response = wrapped(request)
+
+    // Check all three middleware added their headers
+    let path_header: Option[string] = get_header(response.headers, "X-Request-Path")
+    let cors_header: Option[string] = get_header(response.headers, "Access-Control-Allow-Origin")
+    let timeout_header: Option[string] = get_header(response.headers, "X-Timeout-Ms")
+
+    var all_present: bool = false
+    match (path_header, cors_header) {
+        (Some(_), Some(_)) => {
+            match timeout_header {
+                Some(_) => { all_present = true }
+                None => { all_present = false }
+            }
+        }
+        _ => { all_present = false }
+    }
+    assert(all_present, "All middleware in list should be applied")
+    return
+}
+
+let test_apply_all_middleware: fn() -> void = fn() -> void {
+    let middlewares: List[Middleware] = Cons(
+        logging(),
+        Cons(cors(Cons("*", Nil)), Nil)
+    )
+
+    let wrapped: Handler = apply_all_middleware(hello_handler, middlewares)
+    let request: Request = make_request(GET, "/test")
+    let response: Response = wrapped(request)
+
+    let path_header: Option[string] = get_header(response.headers, "X-Request-Path")
+    let cors_header: Option[string] = get_header(response.headers, "Access-Control-Allow-Origin")
+
+    var has_both: bool = false
+    match (path_header, cors_header) {
+        (Some(_), Some(_)) => { has_both = true }
+        _ => { has_both = false }
+    }
+    assert(has_both, "apply_all_middleware should apply all middleware")
+    return
+}
+
+// ============================================================================
+// Tests: Logging middleware output
+// ============================================================================
+
+let test_logging_adds_path_header: fn() -> void = fn() -> void {
+    let mw: Middleware = logging()
+    let wrapped: Handler = apply_middleware(hello_handler, mw)
+
+    let request: Request = make_request(GET, "/api/users")
+    let response: Response = wrapped(request)
+
+    let path_header: Option[string] = get_header(response.headers, "X-Request-Path")
+    var correct_path: bool = false
+    match path_header {
+        Some(value) => { correct_path = value == "/api/users" }
+        None => { correct_path = false }
+    }
+    assert(correct_path, "Logging should add correct path header")
+    return
+}
+
+let test_logging_adds_method_header: fn() -> void = fn() -> void {
+    let mw: Middleware = logging()
+    let wrapped: Handler = apply_middleware(hello_handler, mw)
+
+    let request: Request = make_request(POST, "/api")
+    let response: Response = wrapped(request)
+
+    let method_header: Option[string] = get_header(response.headers, "X-Request-Method")
+    var correct_method: bool = false
+    match method_header {
+        Some(value) => { correct_method = value == "POST" }
+        None => { correct_method = false }
+    }
+    assert(correct_method, "Logging should add correct method header")
+    return
+}
+
+// ============================================================================
+// Tests: CORS header injection
+// ============================================================================
+
+let test_cors_single_origin: fn() -> void = fn() -> void {
+    let mw: Middleware = cors(Cons("https://example.com", Nil))
+    let wrapped: Handler = apply_middleware(hello_handler, mw)
+
+    let request: Request = make_request(GET, "/api")
+    let response: Response = wrapped(request)
+
+    let origin_header: Option[string] = get_header(response.headers, "Access-Control-Allow-Origin")
+    var correct_origin: bool = false
+    match origin_header {
+        Some(value) => { correct_origin = value == "https://example.com" }
+        None => { correct_origin = false }
+    }
+    assert(correct_origin, "CORS should set single origin")
+    return
+}
+
+let test_cors_wildcard: fn() -> void = fn() -> void {
+    let mw: Middleware = cors(Cons("*", Nil))
+    let wrapped: Handler = apply_middleware(hello_handler, mw)
+
+    let request: Request = make_request(GET, "/api")
+    let response: Response = wrapped(request)
+
+    let origin_header: Option[string] = get_header(response.headers, "Access-Control-Allow-Origin")
+    var correct_origin: bool = false
+    match origin_header {
+        Some(value) => { correct_origin = value == "*" }
+        None => { correct_origin = false }
+    }
+    assert(correct_origin, "CORS should set wildcard origin")
+    return
+}
+
+let test_cors_multiple_origins: fn() -> void = fn() -> void {
+    let origins: List[string] = Cons(
+        "https://example.com",
+        Cons("https://other.com", Nil)
+    )
+    let mw: Middleware = cors(origins)
+    let wrapped: Handler = apply_middleware(hello_handler, mw)
+
+    let request: Request = make_request(GET, "/api")
+    let response: Response = wrapped(request)
+
+    let origin_header: Option[string] = get_header(response.headers, "Access-Control-Allow-Origin")
+    var correct_origins: bool = false
+    match origin_header {
+        Some(value) => { correct_origins = value == "https://example.com, https://other.com" }
+        None => { correct_origins = false }
+    }
+    assert(correct_origins, "CORS should join multiple origins")
+    return
+}
+
+let test_cors_adds_methods_header: fn() -> void = fn() -> void {
+    let mw: Middleware = cors(Cons("*", Nil))
+    let wrapped: Handler = apply_middleware(hello_handler, mw)
+
+    let request: Request = make_request(GET, "/api")
+    let response: Response = wrapped(request)
+
+    let methods_header: Option[string] = get_header(response.headers, "Access-Control-Allow-Methods")
+    var has_methods: bool
+    match methods_header {
+        Some(_) => { has_methods = true }
+        None => { has_methods = false }
+    }
+    assert(has_methods, "CORS should add Allow-Methods header")
+    return
+}
+
+let test_cors_adds_headers_header: fn() -> void = fn() -> void {
+    let mw: Middleware = cors(Cons("*", Nil))
+    let wrapped: Handler = apply_middleware(hello_handler, mw)
+
+    let request: Request = make_request(GET, "/api")
+    let response: Response = wrapped(request)
+
+    let headers_header: Option[string] = get_header(response.headers, "Access-Control-Allow-Headers")
+    var has_headers: bool
+    match headers_header {
+        Some(_) => { has_headers = true }
+        None => { has_headers = false }
+    }
+    assert(has_headers, "CORS should add Allow-Headers header")
+    return
+}
+
+// ============================================================================
+// Tests: Timeout middleware
+// ============================================================================
+
+let test_timeout_adds_header: fn() -> void = fn() -> void {
+    let mw: Middleware = timeout(5000)
+    let wrapped: Handler = apply_middleware(hello_handler, mw)
+
+    let request: Request = make_request(GET, "/api")
+    let response: Response = wrapped(request)
+
+    let timeout_header: Option[string] = get_header(response.headers, "X-Timeout-Ms")
+    var correct_timeout: bool = false
+    match timeout_header {
+        Some(value) => { correct_timeout = value == "5000" }
+        None => { correct_timeout = false }
+    }
+    assert(correct_timeout, "Timeout middleware should set X-Timeout-Ms header")
+    return
+}
+
+let test_timeout_different_values: fn() -> void = fn() -> void {
+    let mw: Middleware = timeout(30000)
+    let wrapped: Handler = apply_middleware(hello_handler, mw)
+
+    let request: Request = make_request(GET, "/api")
+    let response: Response = wrapped(request)
+
+    let timeout_header: Option[string] = get_header(response.headers, "X-Timeout-Ms")
+    var correct_timeout: bool = false
+    match timeout_header {
+        Some(value) => { correct_timeout = value == "30000" }
+        None => { correct_timeout = false }
+    }
+    assert(correct_timeout, "Timeout middleware should use configured value")
+    return
+}
+
+// ============================================================================
+// Tests: Router middleware integration
+// ============================================================================
+
+let test_router_use_middleware: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> use_middleware(logging())
+        |> add_route(get("/", hello_handler))
+
+    let request: Request = make_request(GET, "/")
+    let response: Response = handle_request(router, request)
+
+    assert(response.body == "hello", "Handler should still work with middleware")
+
+    let path_header: Option[string] = get_header(response.headers, "X-Request-Path")
+    var has_header: bool
+    match path_header {
+        Some(_) => { has_header = true }
+        None => { has_header = false }
+    }
+    assert(has_header, "Middleware should be applied via router")
+    return
+}
+
+let test_router_multiple_middleware: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> use_middleware(logging())
+        |> use_middleware(cors(Cons("*", Nil)))
+        |> add_route(get("/api", hello_handler))
+
+    let request: Request = make_request(GET, "/api")
+    let response: Response = handle_request(router, request)
+
+    let path_header: Option[string] = get_header(response.headers, "X-Request-Path")
+    let cors_header: Option[string] = get_header(response.headers, "Access-Control-Allow-Origin")
+
+    var has_both: bool = false
+    match (path_header, cors_header) {
+        (Some(_), Some(_)) => { has_both = true }
+        _ => { has_both = false }
+    }
+    assert(has_both, "Multiple middleware should all be applied via router")
+    return
+}
+
+let test_router_middleware_applies_to_not_found: fn() -> void = fn() -> void {
+    let router: Router = new_router()
+        |> use_middleware(cors(Cons("*", Nil)))
+
+    let request: Request = make_request(GET, "/nonexistent")
+    let response: Response = handle_request(router, request)
+
+    let cors_header: Option[string] = get_header(response.headers, "Access-Control-Allow-Origin")
+    var has_cors: bool
+    match cors_header {
+        Some(_) => { has_cors = true }
+        None => { has_cors = false }
+    }
+    assert(has_cors, "Middleware should apply to not-found responses too")
+    return
+}
+
+let test_router_middleware_order: fn() -> void = fn() -> void {
+    // Test that middleware are applied in the correct order
+    // First middleware added should wrap outermost
+
+    // Create middleware that add numbered headers
+    let first_mw: Middleware = fn(next: Handler) -> Handler {
+        return fn(req: Request) -> Response {
+            let response: Response = next(req)
+            return Response {
+                status: response.status,
+                headers: Cons(
+                    { name: "X-Order-1", value: "first" },
+                    response.headers
+                ),
+                body: response.body
+            }
+        }
+    }
+
+    let second_mw: Middleware = fn(next: Handler) -> Handler {
+        return fn(req: Request) -> Response {
+            let response: Response = next(req)
+            return Response {
+                status: response.status,
+                headers: Cons(
+                    { name: "X-Order-2", value: "second" },
+                    response.headers
+                ),
+                body: response.body
+            }
+        }
+    }
+
+    let router: Router = new_router()
+        |> use_middleware(first_mw)
+        |> use_middleware(second_mw)
+        |> add_route(get("/", hello_handler))
+
+    let request: Request = make_request(GET, "/")
+    let response: Response = handle_request(router, request)
+
+    let header1: Option[string] = get_header(response.headers, "X-Order-1")
+    let header2: Option[string] = get_header(response.headers, "X-Order-2")
+
+    var both_present: bool = false
+    match (header1, header2) {
+        (Some(_), Some(_)) => { both_present = true }
+        _ => { both_present = false }
+    }
+    assert(both_present, "Both middleware should have executed")
+    return
+}
