@@ -1,0 +1,250 @@
+/// HTTP client for kira-http
+///
+/// This module provides effectful functions for making HTTP requests.
+/// All functions that perform network IO are marked with `effect`.
+
+module http.client
+
+use http.types.Method
+use http.types.HttpError
+use http.types.Headers
+use http.request.Request
+use http.request.RequestBuilder
+use http.request.build
+use http.request.new_request
+use http.request.with_body
+use http.request.with_header
+use http.response.Response
+
+/// Performs a GET request to the given URL
+///
+/// # Arguments
+/// * `url` - The URL to request
+///
+/// # Returns
+/// A Result containing the Response or an HttpError
+///
+/// # Example
+/// ```
+/// effect fn fetch_data() -> IO[Result[Response, HttpError]] {
+///     return get("https://api.example.com/data")
+/// }
+/// ```
+pub effect fn get(url: string) -> IO[Result[Response, HttpError]] {
+    let builder: RequestBuilder = new_request(GET, url)
+    return send(builder)
+}
+
+/// Performs a POST request to the given URL with a body
+///
+/// # Arguments
+/// * `url` - The URL to request
+/// * `body` - The request body
+///
+/// # Returns
+/// A Result containing the Response or an HttpError
+///
+/// # Example
+/// ```
+/// effect fn create_item(data: string) -> IO[Result[Response, HttpError]] {
+///     return post("https://api.example.com/items", data)
+/// }
+/// ```
+pub effect fn post(url: string, body: string) -> IO[Result[Response, HttpError]] {
+    let builder: RequestBuilder = new_request(POST, url)
+        |> with_body(body)
+    return send(builder)
+}
+
+/// Performs a PUT request to the given URL with a body
+///
+/// # Arguments
+/// * `url` - The URL to request
+/// * `body` - The request body
+///
+/// # Returns
+/// A Result containing the Response or an HttpError
+///
+/// # Example
+/// ```
+/// effect fn update_item(id: string, data: string) -> IO[Result[Response, HttpError]] {
+///     return put("https://api.example.com/items/" + id, data)
+/// }
+/// ```
+pub effect fn put(url: string, body: string) -> IO[Result[Response, HttpError]] {
+    let builder: RequestBuilder = new_request(PUT, url)
+        |> with_body(body)
+    return send(builder)
+}
+
+/// Performs a PATCH request to the given URL with a body
+///
+/// # Arguments
+/// * `url` - The URL to request
+/// * `body` - The request body
+///
+/// # Returns
+/// A Result containing the Response or an HttpError
+pub effect fn patch(url: string, body: string) -> IO[Result[Response, HttpError]] {
+    let builder: RequestBuilder = new_request(PATCH, url)
+        |> with_body(body)
+    return send(builder)
+}
+
+/// Performs a DELETE request to the given URL
+///
+/// # Arguments
+/// * `url` - The URL to request
+///
+/// # Returns
+/// A Result containing the Response or an HttpError
+///
+/// # Example
+/// ```
+/// effect fn remove_item(id: string) -> IO[Result[Response, HttpError]] {
+///     return delete("https://api.example.com/items/" + id)
+/// }
+/// ```
+pub effect fn delete(url: string) -> IO[Result[Response, HttpError]] {
+    let builder: RequestBuilder = new_request(DELETE, url)
+    return send(builder)
+}
+
+/// Performs a HEAD request to the given URL
+///
+/// HEAD is like GET but only retrieves headers, not the body.
+///
+/// # Arguments
+/// * `url` - The URL to request
+///
+/// # Returns
+/// A Result containing the Response or an HttpError
+pub effect fn head(url: string) -> IO[Result[Response, HttpError]] {
+    let builder: RequestBuilder = new_request(HEAD, url)
+    return send(builder)
+}
+
+/// Performs an OPTIONS request to the given URL
+///
+/// OPTIONS is used to describe the communication options for the target resource.
+///
+/// # Arguments
+/// * `url` - The URL to request
+///
+/// # Returns
+/// A Result containing the Response or an HttpError
+pub effect fn options(url: string) -> IO[Result[Response, HttpError]] {
+    let builder: RequestBuilder = new_request(OPTIONS, url)
+    return send(builder)
+}
+
+/// Performs an HTTP request using a Request object
+///
+/// This function allows full control over the request by accepting
+/// a pre-constructed Request object.
+///
+/// # Arguments
+/// * `req` - The Request to send
+///
+/// # Returns
+/// A Result containing the Response or an HttpError
+///
+/// # Example
+/// ```
+/// effect fn custom_request(req: Request) -> IO[Result[Response, HttpError]] {
+///     return request(req)
+/// }
+/// ```
+pub effect fn request(req: Request) -> IO[Result[Response, HttpError]] {
+    // Validate URL before attempting connection
+    if std.string.length(req.url) == 0 {
+        return Err(InvalidUrl("Empty URL"))
+    }
+
+    // Check for valid scheme
+    let has_http: bool = std.string.starts_with(req.url, "http://")
+    let has_https: bool = std.string.starts_with(req.url, "https://")
+
+    if not has_http and not has_https {
+        return Err(InvalidUrl("URL must start with http:// or https://"))
+    }
+
+    // Perform the actual HTTP request using the runtime's network primitives
+    return std.net.http_request(req)
+}
+
+/// Sends an HTTP request using a RequestBuilder
+///
+/// This is the primary way to send requests when using the builder pattern.
+/// The builder is converted to a Request and sent.
+///
+/// # Arguments
+/// * `builder` - The RequestBuilder to send
+///
+/// # Returns
+/// A Result containing the Response or an HttpError
+///
+/// # Example
+/// ```
+/// effect fn create_user(user_json: string) -> IO[Result[Response, HttpError]] {
+///     return new_request(POST, "https://api.example.com/users")
+///         |> with_header("Content-Type", "application/json")
+///         |> with_body(user_json)
+///         |> send()
+/// }
+/// ```
+pub effect fn send(builder: RequestBuilder) -> IO[Result[Response, HttpError]] {
+    let req: Request = build(builder)
+    return request(req)
+}
+
+/// Performs a POST request with JSON content
+///
+/// Automatically sets the Content-Type header to application/json.
+///
+/// # Arguments
+/// * `url` - The URL to request
+/// * `json_body` - The JSON string to send
+///
+/// # Returns
+/// A Result containing the Response or an HttpError
+pub effect fn post_json(url: string, json_body: string) -> IO[Result[Response, HttpError]] {
+    let builder: RequestBuilder = new_request(POST, url)
+        |> with_header("Content-Type", "application/json")
+        |> with_body(json_body)
+    return send(builder)
+}
+
+/// Performs a PUT request with JSON content
+///
+/// Automatically sets the Content-Type header to application/json.
+///
+/// # Arguments
+/// * `url` - The URL to request
+/// * `json_body` - The JSON string to send
+///
+/// # Returns
+/// A Result containing the Response or an HttpError
+pub effect fn put_json(url: string, json_body: string) -> IO[Result[Response, HttpError]] {
+    let builder: RequestBuilder = new_request(PUT, url)
+        |> with_header("Content-Type", "application/json")
+        |> with_body(json_body)
+    return send(builder)
+}
+
+/// Performs a PATCH request with JSON content
+///
+/// Automatically sets the Content-Type header to application/json.
+///
+/// # Arguments
+/// * `url` - The URL to request
+/// * `json_body` - The JSON string to send
+///
+/// # Returns
+/// A Result containing the Response or an HttpError
+pub effect fn patch_json(url: string, json_body: string) -> IO[Result[Response, HttpError]] {
+    let builder: RequestBuilder = new_request(PATCH, url)
+        |> with_header("Content-Type", "application/json")
+        |> with_body(json_body)
+    return send(builder)
+}

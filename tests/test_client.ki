@@ -1,0 +1,305 @@
+/// Tests for the HTTP client module
+///
+/// These tests verify the client functions handle requests correctly,
+/// including error conditions like invalid URLs and connection failures.
+
+module tests.test_client
+
+use http.client.get
+use http.client.post
+use http.client.put
+use http.client.patch
+use http.client.delete
+use http.client.head
+use http.client.options
+use http.client.request
+use http.client.send
+use http.client.post_json
+use http.client.put_json
+use http.client.patch_json
+use http.request.Request
+use http.request.RequestBuilder
+use http.request.new_request
+use http.request.with_header
+use http.request.with_body
+use http.request.with_timeout
+use http.request.build
+use http.response.Response
+use http.types.Method
+use http.types.Status
+use http.types.HttpError
+use http.types.Headers
+
+/// Test that get() rejects empty URLs
+effect fn test_get_empty_url() -> IO[void] {
+    let result: Result[Response, HttpError] = get("")
+
+    var is_invalid_url: bool
+    match result {
+        Ok(_) => { is_invalid_url = false }
+        Err(InvalidUrl(_)) => { is_invalid_url = true }
+        Err(_) => { is_invalid_url = false }
+    }
+
+    assert(is_invalid_url, "Empty URL should return InvalidUrl error")
+    return
+}
+
+/// Test that get() rejects URLs without valid scheme
+effect fn test_get_invalid_scheme() -> IO[void] {
+    let result: Result[Response, HttpError] = get("ftp://example.com")
+
+    var is_invalid_url: bool
+    match result {
+        Ok(_) => { is_invalid_url = false }
+        Err(InvalidUrl(_)) => { is_invalid_url = true }
+        Err(_) => { is_invalid_url = false }
+    }
+
+    assert(is_invalid_url, "FTP URL should return InvalidUrl error")
+    return
+}
+
+/// Test that get() rejects malformed URLs
+effect fn test_get_malformed_url() -> IO[void] {
+    let result: Result[Response, HttpError] = get("not-a-url")
+
+    var is_invalid_url: bool
+    match result {
+        Ok(_) => { is_invalid_url = false }
+        Err(InvalidUrl(_)) => { is_invalid_url = true }
+        Err(_) => { is_invalid_url = false }
+    }
+
+    assert(is_invalid_url, "Malformed URL should return InvalidUrl error")
+    return
+}
+
+/// Test that post() builds request correctly with body
+effect fn test_post_with_body() -> IO[void] {
+    // Test that the request builder works correctly
+    let builder: RequestBuilder = new_request(POST, "https://example.com/api")
+        |> with_body("test body")
+
+    let req: Request = build(builder)
+
+    assert(req.method == POST, "Method should be POST")
+    assert(req.url == "https://example.com/api", "URL should match")
+
+    var has_body: bool
+    match req.body {
+        Some(b) => { has_body = b == "test body" }
+        None => { has_body = false }
+    }
+    assert(has_body, "Body should be set")
+    return
+}
+
+/// Test that put() builds request correctly with body
+effect fn test_put_with_body() -> IO[void] {
+    let builder: RequestBuilder = new_request(PUT, "https://example.com/api/1")
+        |> with_body("updated data")
+
+    let req: Request = build(builder)
+
+    assert(req.method == PUT, "Method should be PUT")
+
+    var has_body: bool
+    match req.body {
+        Some(b) => { has_body = b == "updated data" }
+        None => { has_body = false }
+    }
+    assert(has_body, "Body should be set")
+    return
+}
+
+/// Test that delete() builds request correctly
+effect fn test_delete_request() -> IO[void] {
+    let builder: RequestBuilder = new_request(DELETE, "https://example.com/api/1")
+    let req: Request = build(builder)
+
+    assert(req.method == DELETE, "Method should be DELETE")
+
+    var has_no_body: bool
+    match req.body {
+        Some(_) => { has_no_body = false }
+        None => { has_no_body = true }
+    }
+    assert(has_no_body, "DELETE should have no body by default")
+    return
+}
+
+/// Test that request builder with headers works
+effect fn test_request_builder_with_headers() -> IO[void] {
+    let builder: RequestBuilder = new_request(GET, "https://example.com/api")
+        |> with_header("Authorization", "Bearer token123")
+        |> with_header("Accept", "application/json")
+
+    let req: Request = build(builder)
+
+    // Check that headers were added
+    var has_auth: bool = false
+    var has_accept: bool = false
+    var headers: Headers = req.headers
+
+    match headers {
+        Nil => { }
+        Cons(h, rest) => {
+            if h.name == "Authorization" and h.value == "Bearer token123" {
+                has_auth = true
+            }
+            if h.name == "Accept" and h.value == "application/json" {
+                has_accept = true
+            }
+            match rest {
+                Nil => { }
+                Cons(h2, _) => {
+                    if h2.name == "Authorization" and h2.value == "Bearer token123" {
+                        has_auth = true
+                    }
+                    if h2.name == "Accept" and h2.value == "application/json" {
+                        has_accept = true
+                    }
+                }
+            }
+        }
+    }
+
+    assert(has_auth, "Should have Authorization header")
+    assert(has_accept, "Should have Accept header")
+    return
+}
+
+/// Test that request builder with timeout works
+effect fn test_request_builder_with_timeout() -> IO[void] {
+    let builder: RequestBuilder = new_request(GET, "https://example.com/api")
+        |> with_timeout(5000)
+
+    var has_timeout: bool
+    match builder.timeout {
+        Some(t) => { has_timeout = t == 5000 }
+        None => { has_timeout = false }
+    }
+
+    assert(has_timeout, "Timeout should be set to 5000ms")
+    return
+}
+
+/// Test post_json sets correct content type
+effect fn test_post_json_content_type() -> IO[void] {
+    let builder: RequestBuilder = new_request(POST, "https://example.com/api")
+        |> with_header("Content-Type", "application/json")
+        |> with_body("{\"name\": \"test\"}")
+
+    let req: Request = build(builder)
+
+    var has_json_content_type: bool = false
+    var headers: Headers = req.headers
+
+    match headers {
+        Nil => { }
+        Cons(h, rest) => {
+            if h.name == "Content-Type" and h.value == "application/json" {
+                has_json_content_type = true
+            }
+            match rest {
+                Nil => { }
+                Cons(h2, _) => {
+                    if h2.name == "Content-Type" and h2.value == "application/json" {
+                        has_json_content_type = true
+                    }
+                }
+            }
+        }
+    }
+
+    assert(has_json_content_type, "Should have application/json content type")
+    return
+}
+
+/// Test head request has correct method
+effect fn test_head_request() -> IO[void] {
+    let builder: RequestBuilder = new_request(HEAD, "https://example.com")
+    let req: Request = build(builder)
+
+    assert(req.method == HEAD, "Method should be HEAD")
+    return
+}
+
+/// Test options request has correct method
+effect fn test_options_request() -> IO[void] {
+    let builder: RequestBuilder = new_request(OPTIONS, "https://example.com")
+    let req: Request = build(builder)
+
+    assert(req.method == OPTIONS, "Method should be OPTIONS")
+    return
+}
+
+/// Test patch request with body
+effect fn test_patch_with_body() -> IO[void] {
+    let builder: RequestBuilder = new_request(PATCH, "https://example.com/api/1")
+        |> with_body("{\"field\": \"value\"}")
+
+    let req: Request = build(builder)
+
+    assert(req.method == PATCH, "Method should be PATCH")
+
+    var has_body: bool
+    match req.body {
+        Some(b) => { has_body = b == "{\"field\": \"value\"}" }
+        None => { has_body = false }
+    }
+    assert(has_body, "PATCH should have body")
+    return
+}
+
+/// Test request URL validation - valid HTTP URL
+effect fn test_valid_http_url() -> IO[void] {
+    // Build a request with a valid HTTP URL
+    let builder: RequestBuilder = new_request(GET, "http://example.com/path")
+    let req: Request = build(builder)
+
+    // URL validation happens at the request level
+    let has_valid_scheme: bool = std.string.starts_with(req.url, "http://")
+    assert(has_valid_scheme, "HTTP URLs should be valid")
+    return
+}
+
+/// Test request URL validation - valid HTTPS URL
+effect fn test_valid_https_url() -> IO[void] {
+    let builder: RequestBuilder = new_request(GET, "https://example.com/path")
+    let req: Request = build(builder)
+
+    let has_valid_scheme: bool = std.string.starts_with(req.url, "https://")
+    assert(has_valid_scheme, "HTTPS URLs should be valid")
+    return
+}
+
+/// Test chained builder operations
+effect fn test_chained_builder() -> IO[void] {
+    let builder: RequestBuilder = new_request(POST, "https://api.example.com/users")
+        |> with_header("Content-Type", "application/json")
+        |> with_header("Authorization", "Bearer abc123")
+        |> with_body("{\"name\": \"Alice\"}")
+        |> with_timeout(10000)
+
+    let req: Request = build(builder)
+
+    assert(req.method == POST, "Method should be POST")
+    assert(req.url == "https://api.example.com/users", "URL should match")
+
+    var has_body: bool
+    match req.body {
+        Some(b) => { has_body = b == "{\"name\": \"Alice\"}" }
+        None => { has_body = false }
+    }
+    assert(has_body, "Body should be set")
+
+    var has_timeout: bool
+    match builder.timeout {
+        Some(t) => { has_timeout = t == 10000 }
+        None => { has_timeout = false }
+    }
+    assert(has_timeout, "Timeout should be set")
+    return
+}

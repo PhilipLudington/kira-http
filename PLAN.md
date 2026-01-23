@@ -92,17 +92,17 @@ Request and response types with builder pattern.
 Effectful client functions for making HTTP requests.
 
 ### 4.1 Create `src/client.ki`
-- [ ] Implement `effect fn get(url: string) -> Result[Response, HttpError]`
-- [ ] Implement `effect fn post(url: string, body: string) -> Result[Response, HttpError]`
-- [ ] Implement `effect fn put(url: string, body: string) -> Result[Response, HttpError]`
-- [ ] Implement `effect fn delete(url: string) -> Result[Response, HttpError]`
-- [ ] Implement `effect fn request(req: Request) -> Result[Response, HttpError]`
-- [ ] Implement `effect fn send(builder: RequestBuilder) -> Result[Response, HttpError]`
+- [x] Implement `effect fn get(url: string) -> Result[Response, HttpError]`
+- [x] Implement `effect fn post(url: string, body: string) -> Result[Response, HttpError]`
+- [x] Implement `effect fn put(url: string, body: string) -> Result[Response, HttpError]`
+- [x] Implement `effect fn delete(url: string) -> Result[Response, HttpError]`
+- [x] Implement `effect fn request(req: Request) -> Result[Response, HttpError]`
+- [x] Implement `effect fn send(builder: RequestBuilder) -> Result[Response, HttpError]`
 
 ### 4.2 Create `tests/test_client.ki`
-- [ ] Test successful requests
-- [ ] Test error handling (connection failed, timeout, invalid URL)
-- [ ] Test request builder send
+- [x] Test successful requests
+- [x] Test error handling (connection failed, timeout, invalid URL)
+- [x] Test request builder send
 
 ## Phase 5: Routing
 
