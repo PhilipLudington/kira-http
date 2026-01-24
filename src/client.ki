@@ -5,16 +5,9 @@
 
 module http.client
 
-use http.types.Method
-use http.types.HttpError
-use http.types.Headers
-use http.request.Request
-use http.request.RequestBuilder
-use http.request.build
-use http.request.new_request
-use http.request.with_body
-use http.request.with_header
-use http.response.Response
+import http.types.{Method, HttpError, Headers}
+import http.request.{Request, RequestBuilder, build, new_request, with_body, with_header}
+import http.response.{Response}
 
 /// Performs a GET request to the given URL
 ///
@@ -51,8 +44,7 @@ pub effect fn get(url: string) -> IO[Result[Response, HttpError]] {
 /// }
 /// ```
 pub effect fn post(url: string, body: string) -> IO[Result[Response, HttpError]] {
-    let builder: RequestBuilder = new_request(POST, url)
-        |> with_body(body)
+    let builder: RequestBuilder = with_body(new_request(POST, url), body)
     return send(builder)
 }
 
@@ -72,8 +64,7 @@ pub effect fn post(url: string, body: string) -> IO[Result[Response, HttpError]]
 /// }
 /// ```
 pub effect fn put(url: string, body: string) -> IO[Result[Response, HttpError]] {
-    let builder: RequestBuilder = new_request(PUT, url)
-        |> with_body(body)
+    let builder: RequestBuilder = with_body(new_request(PUT, url), body)
     return send(builder)
 }
 
@@ -86,8 +77,7 @@ pub effect fn put(url: string, body: string) -> IO[Result[Response, HttpError]] 
 /// # Returns
 /// A Result containing the Response or an HttpError
 pub effect fn patch(url: string, body: string) -> IO[Result[Response, HttpError]] {
-    let builder: RequestBuilder = new_request(PATCH, url)
-        |> with_body(body)
+    let builder: RequestBuilder = with_body(new_request(PATCH, url), body)
     return send(builder)
 }
 
@@ -209,9 +199,9 @@ pub effect fn send(builder: RequestBuilder) -> IO[Result[Response, HttpError]] {
 /// # Returns
 /// A Result containing the Response or an HttpError
 pub effect fn post_json(url: string, json_body: string) -> IO[Result[Response, HttpError]] {
-    let builder: RequestBuilder = new_request(POST, url)
-        |> with_header("Content-Type", "application/json")
-        |> with_body(json_body)
+    let b1: RequestBuilder = new_request(POST, url)
+    let b2: RequestBuilder = with_header(b1, "Content-Type", "application/json")
+    let builder: RequestBuilder = with_body(b2, json_body)
     return send(builder)
 }
 
@@ -226,9 +216,9 @@ pub effect fn post_json(url: string, json_body: string) -> IO[Result[Response, H
 /// # Returns
 /// A Result containing the Response or an HttpError
 pub effect fn put_json(url: string, json_body: string) -> IO[Result[Response, HttpError]] {
-    let builder: RequestBuilder = new_request(PUT, url)
-        |> with_header("Content-Type", "application/json")
-        |> with_body(json_body)
+    let b1: RequestBuilder = new_request(PUT, url)
+    let b2: RequestBuilder = with_header(b1, "Content-Type", "application/json")
+    let builder: RequestBuilder = with_body(b2, json_body)
     return send(builder)
 }
 
@@ -243,8 +233,8 @@ pub effect fn put_json(url: string, json_body: string) -> IO[Result[Response, Ht
 /// # Returns
 /// A Result containing the Response or an HttpError
 pub effect fn patch_json(url: string, json_body: string) -> IO[Result[Response, HttpError]] {
-    let builder: RequestBuilder = new_request(PATCH, url)
-        |> with_header("Content-Type", "application/json")
-        |> with_body(json_body)
+    let b1: RequestBuilder = new_request(PATCH, url)
+    let b2: RequestBuilder = with_header(b1, "Content-Type", "application/json")
+    let builder: RequestBuilder = with_body(b2, json_body)
     return send(builder)
 }

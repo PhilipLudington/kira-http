@@ -6,21 +6,12 @@
 
 module http.server
 
-use http.types.Method
-use http.types.Status
-use http.types.Header
-use http.types.Headers
-use http.types.HttpError
-use http.types.QueryParam
-use http.request.Request
-use http.response.Response
-use http.router.Router
-use http.router.Route
-use http.router.new_router
-use http.router.add_routes
-use http.router.handle_request
-use http.status.status_code
-use http.url.parse_query_string
+import http.types.{Method, Status, Header, Headers, HttpError, QueryParam}
+import http.request.{Request}
+import http.response.{Response}
+import http.router.{Router, Route, new_router, add_routes, handle_request}
+import http.status.{status_code}
+import http.url.{parse_query_string}
 
 /// Starts an HTTP server on the specified port with the given router
 ///
@@ -108,8 +99,7 @@ pub effect fn serve(port: i32, router: Router) -> Result[void, HttpError] {
 /// }
 /// ```
 pub effect fn serve_routes(port: i32, routes: List[Route]) -> Result[void, HttpError] {
-    let router: Router = new_router()
-        |> add_routes(routes)
+    let router: Router = add_routes(new_router(), routes)
     return serve(port, router)
 }
 

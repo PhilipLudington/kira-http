@@ -5,12 +5,9 @@
 
 module http.request
 
-use http.types.Method
-use http.types.Header
-use http.types.Headers
-use http.types.QueryParam
-use http.headers.set_header
-use http.url.parse_query_string
+import http.types.{Method, Header, Headers, QueryParam}
+import http.headers.{set_header}
+import http.url.{parse_query_string}
 
 /// An HTTP request
 ///

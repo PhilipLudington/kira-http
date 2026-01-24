@@ -5,19 +5,10 @@
 
 module tests.test_server
 
-use http.types.Method
-use http.types.Status
-use http.types.Header
-use http.types.Headers
-use http.types.HttpError
-use http.types.QueryParam
-use http.request.Request
-use http.response.Response
-use http.response.ok
-use http.response.not_found
-use http.response.json_ok
-use http.server.parse_http_request
-use http.server.serialize_http_response
+import http.types.{Method, Status, Header, Headers, HttpError, QueryParam}
+import http.request.{Request}
+import http.response.{Response, ok, not_found, json_ok}
+import http.server.{parse_http_request, serialize_http_response}
 
 // =============================================================================
 // Request Parsing Tests

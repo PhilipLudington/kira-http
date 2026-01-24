@@ -5,7 +5,7 @@
 
 module http.status
 
-use http.types.Status
+import http.types.{Status}
 
 /// Converts a Status to its numeric HTTP status code
 ///

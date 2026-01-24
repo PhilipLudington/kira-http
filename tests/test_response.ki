@@ -4,31 +4,10 @@
 
 module http.tests.test_response
 
-use http.types.Status
-use http.types.Header
-use http.types.Headers
-use http.response.Response
-use http.response.ok
-use http.response.created
-use http.response.no_content
-use http.response.bad_request
-use http.response.unauthorized
-use http.response.forbidden
-use http.response.not_found
-use http.response.method_not_allowed
-use http.response.conflict
-use http.response.internal_error
-use http.response.service_unavailable
-use http.response.json_response
-use http.response.json_ok
-use http.response.json_created
-use http.response.redirect
-use http.response.permanent_redirect
-use http.response.with_header
-use http.response.with_body
-use http.response.with_status
-use http.headers.get_header
-use http.status.status_code
+import http.types.{Status, Header, Headers}
+import http.response.{Response, ok, created, no_content, bad_request, unauthorized, forbidden, not_found, method_not_allowed, conflict, internal_error, service_unavailable, json_response, json_ok, json_created, redirect, permanent_redirect, with_header, with_body, with_status}
+import http.headers.{get_header}
+import http.status.{status_code}
 
 // ok tests
 
@@ -478,8 +457,7 @@ let test_permanent_redirect_status_code: fn() -> void = fn() -> void {
 // with_header tests
 
 let test_with_header_adds_header: fn() -> void = fn() -> void {
-    let response: Response = ok("body")
-        |> with_header("X-Custom", "value")
+    let response: Response = with_header(ok("body"), "X-Custom", "value")
 
     var has_custom: bool
     match get_header(response.headers, "X-Custom") {
@@ -491,8 +469,7 @@ let test_with_header_adds_header: fn() -> void = fn() -> void {
 }
 
 let test_with_header_preserves_existing: fn() -> void = fn() -> void {
-    let response: Response = ok("body")
-        |> with_header("X-Custom", "value")
+    let response: Response = with_header(ok("body"), "X-Custom", "value")
 
     var has_content_type: bool
     match get_header(response.headers, "Content-Type") {
@@ -506,16 +483,14 @@ let test_with_header_preserves_existing: fn() -> void = fn() -> void {
 // with_body tests
 
 let test_with_body_changes_body: fn() -> void = fn() -> void {
-    let response: Response = ok("original")
-        |> with_body("modified")
+    let response: Response = with_body(ok("original"), "modified")
 
     assert(response.body == "modified")
     return
 }
 
 let test_with_body_preserves_status: fn() -> void = fn() -> void {
-    let response: Response = ok("original")
-        |> with_body("modified")
+    let response: Response = with_body(ok("original"), "modified")
 
     var matches: bool
     match response.status {
@@ -529,8 +504,7 @@ let test_with_body_preserves_status: fn() -> void = fn() -> void {
 // with_status tests
 
 let test_with_status_changes_status: fn() -> void = fn() -> void {
-    let response: Response = ok("body")
-        |> with_status(Created)
+    let response: Response = with_status(ok("body"), Created)
 
     var matches: bool
     match response.status {
@@ -542,8 +516,7 @@ let test_with_status_changes_status: fn() -> void = fn() -> void {
 }
 
 let test_with_status_preserves_body: fn() -> void = fn() -> void {
-    let response: Response = ok("original body")
-        |> with_status(Created)
+    let response: Response = with_status(ok("original body"), Created)
 
     assert(response.body == "original body")
     return
@@ -552,10 +525,10 @@ let test_with_status_preserves_body: fn() -> void = fn() -> void {
 // chaining tests
 
 let test_response_chaining: fn() -> void = fn() -> void {
-    let response: Response = ok("initial")
-        |> with_header("X-Request-Id", "123")
-        |> with_body("final body")
-        |> with_status(Created)
+    let r1: Response = ok("initial")
+    let r2: Response = with_header(r1, "X-Request-Id", "123")
+    let r3: Response = with_body(r2, "final body")
+    let response: Response = with_status(r3, Created)
 
     var is_created: bool
     match response.status {

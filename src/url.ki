@@ -6,8 +6,7 @@
 
 module http.url
 
-use http.types.HttpError
-use http.types.QueryParam
+import http.types.{HttpError, QueryParam}
 
 /// A parsed URL with its component parts
 ///
@@ -243,15 +242,17 @@ let parse_query_pairs: fn(string) -> List[QueryParam] =
 
         match eq_idx {
             Some(idx) => {
+                let raw_key: string = std.string.substring(current_pair, 0, idx)
+                let raw_value: string = std.string.substring(current_pair, idx + 1, std.string.length(current_pair))
                 param = QueryParam {
-                    key: std.string.substring(current_pair, 0, idx),
-                    value: std.string.substring(current_pair, idx + 1, std.string.length(current_pair))
+                    key: url_decode(raw_key),
+                    value: url_decode(raw_value)
                 }
             }
             None => {
                 // Key without value
                 param = QueryParam {
-                    key: current_pair,
+                    key: url_decode(current_pair),
                     value: ""
                 }
             }
@@ -390,7 +391,8 @@ let find_path_param: fn(List[string], List[string], string) -> Option[string] =
                         if std.string.length(pattern_seg) > 0 and std.string.char_at(pattern_seg, 0) == ':' {
                             let param_name: string = std.string.substring(pattern_seg, 1, std.string.length(pattern_seg))
                             if param_name == name {
-                                result = Some(path_seg)
+                                // Decode URL-encoded characters in path parameter value
+                                result = Some(url_decode(path_seg))
                             } else {
                                 result = find_path_param(pattern_rest, path_rest, name)
                             }
@@ -446,4 +448,94 @@ let segments_match: fn(List[string], List[string]) -> bool =
             }
         }
         return result
+    }
+
+/// Decodes a URL-encoded string
+///
+/// Handles:
+/// - %XX hex-encoded characters (e.g., %20 for space)
+/// - + as space (common in query strings)
+///
+/// # Arguments
+/// * `s` - The URL-encoded string
+///
+/// # Returns
+/// The decoded string
+///
+/// # Example
+/// ```
+/// let decoded: string = url_decode("hello%20world")  // "hello world"
+/// let decoded2: string = url_decode("hello+world")   // "hello world"
+/// ```
+pub let url_decode: fn(string) -> string =
+    fn(s: string) -> string {
+        return decode_chars(s, 0, std.string.length(s), "")
+    }
+
+let decode_chars: fn(string, i32, i32, string) -> string =
+    fn(s: string, pos: i32, len: i32, result: string) -> string {
+        if pos >= len {
+            return result
+        }
+
+        let ch: char = std.string.char_at(s, pos)
+
+        // Handle + as space
+        if ch == '+' {
+            return decode_chars(s, pos + 1, len, result + " ")
+        }
+
+        // Handle %XX encoding
+        if ch == '%' and pos + 2 < len {
+            let hex1: char = std.string.char_at(s, pos + 1)
+            let hex2: char = std.string.char_at(s, pos + 2)
+            let decoded_char: Option[char] = decode_hex_pair(hex1, hex2)
+            match decoded_char {
+                Some(decoded) => {
+                    return decode_chars(s, pos + 3, len, result + std.char.to_string(decoded))
+                }
+                None => {
+                    // Invalid hex sequence, keep as-is
+                    return decode_chars(s, pos + 1, len, result + std.char.to_string(ch))
+                }
+            }
+        }
+
+        // Regular character
+        return decode_chars(s, pos + 1, len, result + std.char.to_string(ch))
+    }
+
+let decode_hex_pair: fn(char, char) -> Option[char] =
+    fn(c1: char, c2: char) -> Option[char] {
+        let v1: Option[i32] = hex_digit_value(c1)
+        let v2: Option[i32] = hex_digit_value(c2)
+
+        var result: Option[char]
+        match v1 {
+            Some(high) => {
+                match v2 {
+                    Some(low) => {
+                        let code: i32 = high * 16 + low
+                        result = Some(std.char.from_code(code))
+                    }
+                    None => { result = None }
+                }
+            }
+            None => { result = None }
+        }
+        return result
+    }
+
+let hex_digit_value: fn(char) -> Option[i32] =
+    fn(c: char) -> Option[i32] {
+        if c >= '0' and c <= '9' {
+            return Some(std.char.to_code(c) - std.char.to_code('0'))
+        }
+        if c >= 'a' and c <= 'f' {
+            return Some(10 + std.char.to_code(c) - std.char.to_code('a'))
+        }
+        if c >= 'A' and c <= 'F' {
+            return Some(10 + std.char.to_code(c) - std.char.to_code('A'))
+        }
+        return None
     }

@@ -5,8 +5,7 @@
 
 module http.headers
 
-use http.types.Header
-use http.types.Headers
+import http.types.{Header, Headers}
 
 /// Gets the value of a header by name (case-insensitive)
 ///

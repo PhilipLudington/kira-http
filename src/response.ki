@@ -5,11 +5,8 @@
 
 module http.response
 
-use http.types.Status
-use http.types.Header
-use http.types.Headers
-use http.headers.CONTENT_TYPE_JSON
-use http.headers.CONTENT_TYPE_TEXT
+import http.types.{Status, Header, Headers}
+import http.headers.{CONTENT_TYPE_JSON, CONTENT_TYPE_TEXT}
 
 /// An HTTP response
 ///

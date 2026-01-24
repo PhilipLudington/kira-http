@@ -5,30 +5,10 @@
 
 module tests.test_client
 
-use http.client.get
-use http.client.post
-use http.client.put
-use http.client.patch
-use http.client.delete
-use http.client.head
-use http.client.options
-use http.client.request
-use http.client.send
-use http.client.post_json
-use http.client.put_json
-use http.client.patch_json
-use http.request.Request
-use http.request.RequestBuilder
-use http.request.new_request
-use http.request.with_header
-use http.request.with_body
-use http.request.with_timeout
-use http.request.build
-use http.response.Response
-use http.types.Method
-use http.types.Status
-use http.types.HttpError
-use http.types.Headers
+import http.client.{get, post, put, patch, delete, head, options, request, send, post_json, put_json, patch_json}
+import http.request.{Request, RequestBuilder, new_request, with_header, with_body, with_timeout, build}
+import http.response.{Response}
+import http.types.{Method, Status, HttpError, Headers}
 
 /// Test that get() rejects empty URLs
 effect fn test_get_empty_url() -> IO[void] {
@@ -78,8 +58,8 @@ effect fn test_get_malformed_url() -> IO[void] {
 /// Test that post() builds request correctly with body
 effect fn test_post_with_body() -> IO[void] {
     // Test that the request builder works correctly
-    let builder: RequestBuilder = new_request(POST, "https://example.com/api")
-        |> with_body("test body")
+    let b1: RequestBuilder = new_request(POST, "https://example.com/api")
+    let builder: RequestBuilder = with_body(b1, "test body")
 
     let req: Request = build(builder)
 
@@ -97,8 +77,8 @@ effect fn test_post_with_body() -> IO[void] {
 
 /// Test that put() builds request correctly with body
 effect fn test_put_with_body() -> IO[void] {
-    let builder: RequestBuilder = new_request(PUT, "https://example.com/api/1")
-        |> with_body("updated data")
+    let b1: RequestBuilder = new_request(PUT, "https://example.com/api/1")
+    let builder: RequestBuilder = with_body(b1, "updated data")
 
     let req: Request = build(builder)
 
@@ -131,9 +111,9 @@ effect fn test_delete_request() -> IO[void] {
 
 /// Test that request builder with headers works
 effect fn test_request_builder_with_headers() -> IO[void] {
-    let builder: RequestBuilder = new_request(GET, "https://example.com/api")
-        |> with_header("Authorization", "Bearer token123")
-        |> with_header("Accept", "application/json")
+    let b1: RequestBuilder = new_request(GET, "https://example.com/api")
+    let b2: RequestBuilder = with_header(b1, "Authorization", "Bearer token123")
+    let builder: RequestBuilder = with_header(b2, "Accept", "application/json")
 
     let req: Request = build(builder)
 
@@ -172,8 +152,8 @@ effect fn test_request_builder_with_headers() -> IO[void] {
 
 /// Test that request builder with timeout works
 effect fn test_request_builder_with_timeout() -> IO[void] {
-    let builder: RequestBuilder = new_request(GET, "https://example.com/api")
-        |> with_timeout(5000)
+    let b1: RequestBuilder = new_request(GET, "https://example.com/api")
+    let builder: RequestBuilder = with_timeout(b1, 5000)
 
     var has_timeout: bool
     match builder.timeout {
@@ -187,9 +167,9 @@ effect fn test_request_builder_with_timeout() -> IO[void] {
 
 /// Test post_json sets correct content type
 effect fn test_post_json_content_type() -> IO[void] {
-    let builder: RequestBuilder = new_request(POST, "https://example.com/api")
-        |> with_header("Content-Type", "application/json")
-        |> with_body("{\"name\": \"test\"}")
+    let b1: RequestBuilder = new_request(POST, "https://example.com/api")
+    let b2: RequestBuilder = with_header(b1, "Content-Type", "application/json")
+    let builder: RequestBuilder = with_body(b2, "{\"name\": \"test\"}")
 
     let req: Request = build(builder)
 
@@ -237,8 +217,8 @@ effect fn test_options_request() -> IO[void] {
 
 /// Test patch request with body
 effect fn test_patch_with_body() -> IO[void] {
-    let builder: RequestBuilder = new_request(PATCH, "https://example.com/api/1")
-        |> with_body("{\"field\": \"value\"}")
+    let b1: RequestBuilder = new_request(PATCH, "https://example.com/api/1")
+    let builder: RequestBuilder = with_body(b1, "{\"field\": \"value\"}")
 
     let req: Request = build(builder)
 
@@ -277,11 +257,11 @@ effect fn test_valid_https_url() -> IO[void] {
 
 /// Test chained builder operations
 effect fn test_chained_builder() -> IO[void] {
-    let builder: RequestBuilder = new_request(POST, "https://api.example.com/users")
-        |> with_header("Content-Type", "application/json")
-        |> with_header("Authorization", "Bearer abc123")
-        |> with_body("{\"name\": \"Alice\"}")
-        |> with_timeout(10000)
+    let b1: RequestBuilder = new_request(POST, "https://api.example.com/users")
+    let b2: RequestBuilder = with_header(b1, "Content-Type", "application/json")
+    let b3: RequestBuilder = with_header(b2, "Authorization", "Bearer abc123")
+    let b4: RequestBuilder = with_body(b3, "{\"name\": \"Alice\"}")
+    let builder: RequestBuilder = with_timeout(b4, 10000)
 
     let req: Request = build(builder)
 

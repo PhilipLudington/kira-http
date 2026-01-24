@@ -6,12 +6,10 @@
 
 module http.middleware
 
-use http.types.Method
-use http.types.Header
-use http.types.Headers
-use http.request.Request
-use http.response.Response
-use http.headers.set_header
+import http.types.{Method, Status, Header, Headers}
+import http.request.{Request}
+import http.response.{Response}
+import http.headers.{set_header}
 
 /// A middleware function that wraps a handler
 ///
@@ -78,7 +76,8 @@ let add_debug_header: fn(Response, string, string) -> Response =
 /// Creates a CORS middleware
 ///
 /// Adds Cross-Origin Resource Sharing headers to responses. Handles
-/// preflight OPTIONS requests automatically.
+/// preflight OPTIONS requests automatically by returning a 204 No Content
+/// response with appropriate CORS headers.
 ///
 /// # Arguments
 /// * `origins` - List of allowed origins (e.g., ["https://example.com"])
@@ -97,6 +96,23 @@ pub let cors: fn(List[string]) -> Middleware =
     fn(origins: List[string]) -> Middleware {
         return fn(next: Handler) -> Handler {
             return fn(req: Request) -> Response {
+                // Handle preflight OPTIONS requests
+                var is_options: bool = false
+                match req.method {
+                    OPTIONS => { is_options = true }
+                    _ => { is_options = false }
+                }
+
+                if is_options {
+                    // Return 204 No Content with CORS headers for preflight
+                    let preflight_response: Response = Response {
+                        status: NoContent,
+                        headers: Nil,
+                        body: ""
+                    }
+                    return add_cors_headers(preflight_response, origins)
+                }
+
                 let response: Response = next(req)
                 return add_cors_headers(response, origins)
             }
@@ -105,6 +121,17 @@ pub let cors: fn(List[string]) -> Middleware =
 
 let add_cors_headers: fn(Response, List[string]) -> Response =
     fn(response: Response, origins: List[string]) -> Response {
+        // Only add CORS headers if origins list is not empty
+        var has_origins: bool = false
+        match origins {
+            Nil => { has_origins = false }
+            Cons(_, _) => { has_origins = true }
+        }
+
+        if not has_origins {
+            return response
+        }
+
         let origin_value: string = join_origins(origins)
         let with_origin: Response = Response {
             status: response.status,

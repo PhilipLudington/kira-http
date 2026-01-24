@@ -5,14 +5,11 @@
 
 module http.router
 
-use http.types.Method
-use http.types.QueryParam
-use http.request.Request
-use http.request.with_path_params
-use http.response.Response
-use http.response.not_found
-use http.middleware.Middleware
-use http.middleware.apply_all_middleware
+import http.types.{Method, QueryParam}
+import http.request.{Request, with_path_params}
+import http.response.{Response, not_found}
+import http.middleware.{Middleware, apply_all_middleware}
+import http.url.{url_decode}
 
 /// A request handler function
 ///
@@ -434,9 +431,10 @@ let match_segments: fn(List[string], List[string], List[QueryParam]) -> Option[L
             }
             (Cons(pattern_seg, pattern_rest), Cons(path_seg, path_rest)) => {
                 if is_param_segment(pattern_seg) {
-                    // Parameter segment - extract value
+                    // Parameter segment - extract and decode value
                     let param_name: string = std.string.substring(pattern_seg, 1, std.string.length(pattern_seg))
-                    let param: QueryParam = QueryParam { key: param_name, value: path_seg }
+                    let decoded_value: string = url_decode(path_seg)
+                    let param: QueryParam = QueryParam { key: param_name, value: decoded_value }
                     let new_params: List[QueryParam] = Cons(param, params)
                     result = match_segments(pattern_rest, path_rest, new_params)
                 } else if pattern_seg == path_seg {
