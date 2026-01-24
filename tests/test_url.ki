@@ -10,7 +10,7 @@ import http.url.{Url, parse_url, build_url, parse_query_string, get_query_param,
 
 // URL parsing tests - various schemes
 
-let test_parse_url_https: fn() -> void = fn() -> void {
+test "parse_url parses https scheme" {
     let result: Result[Url, HttpError] = parse_url("https://example.com/path")
     var is_valid: bool
     match result {
@@ -20,10 +20,9 @@ let test_parse_url_https: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_parse_url_http: fn() -> void = fn() -> void {
+test "parse_url parses http scheme" {
     let result: Result[Url, HttpError] = parse_url("http://example.com")
     var is_valid: bool
     match result {
@@ -33,10 +32,9 @@ let test_parse_url_http: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_parse_url_ftp: fn() -> void = fn() -> void {
+test "parse_url parses ftp scheme" {
     let result: Result[Url, HttpError] = parse_url("ftp://files.example.com/download")
     var is_valid: bool
     match result {
@@ -46,12 +44,11 @@ let test_parse_url_ftp: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
 // URL parsing tests - with port
 
-let test_parse_url_with_port: fn() -> void = fn() -> void {
+test "parse_url extracts port 8080" {
     let result: Result[Url, HttpError] = parse_url("https://example.com:8080/api")
     var is_valid: bool
     match result {
@@ -64,10 +61,9 @@ let test_parse_url_with_port: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_parse_url_with_port_443: fn() -> void = fn() -> void {
+test "parse_url extracts port 443" {
     let result: Result[Url, HttpError] = parse_url("https://example.com:443")
     var is_valid: bool
     match result {
@@ -80,10 +76,9 @@ let test_parse_url_with_port_443: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_parse_url_without_port: fn() -> void = fn() -> void {
+test "parse_url has None port when not specified" {
     let result: Result[Url, HttpError] = parse_url("https://example.com/path")
     var is_valid: bool
     match result {
@@ -96,12 +91,11 @@ let test_parse_url_without_port: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
 // URL parsing tests - with path
 
-let test_parse_url_simple_path: fn() -> void = fn() -> void {
+test "parse_url extracts simple path" {
     let result: Result[Url, HttpError] = parse_url("https://example.com/users")
     var is_valid: bool
     match result {
@@ -109,10 +103,9 @@ let test_parse_url_simple_path: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_parse_url_nested_path: fn() -> void = fn() -> void {
+test "parse_url extracts nested path" {
     let result: Result[Url, HttpError] = parse_url("https://example.com/api/v1/users")
     var is_valid: bool
     match result {
@@ -120,10 +113,9 @@ let test_parse_url_nested_path: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_parse_url_no_path: fn() -> void = fn() -> void {
+test "parse_url defaults to / for no path" {
     let result: Result[Url, HttpError] = parse_url("https://example.com")
     var is_valid: bool
     match result {
@@ -131,10 +123,9 @@ let test_parse_url_no_path: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_parse_url_root_path: fn() -> void = fn() -> void {
+test "parse_url handles root path" {
     let result: Result[Url, HttpError] = parse_url("https://example.com/")
     var is_valid: bool
     match result {
@@ -142,12 +133,11 @@ let test_parse_url_root_path: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
 // URL parsing tests - with query
 
-let test_parse_url_with_query: fn() -> void = fn() -> void {
+test "parse_url extracts query string" {
     let result: Result[Url, HttpError] = parse_url("https://example.com/search?q=kira")
     var is_valid: bool
     match result {
@@ -160,10 +150,9 @@ let test_parse_url_with_query: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_parse_url_with_multiple_query_params: fn() -> void = fn() -> void {
+test "parse_url extracts multiple query params" {
     let result: Result[Url, HttpError] = parse_url("https://example.com/search?q=kira&limit=10")
     var is_valid: bool
     match result {
@@ -176,10 +165,9 @@ let test_parse_url_with_multiple_query_params: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_parse_url_without_query: fn() -> void = fn() -> void {
+test "parse_url has None query when not specified" {
     let result: Result[Url, HttpError] = parse_url("https://example.com/path")
     var is_valid: bool
     match result {
@@ -192,12 +180,11 @@ let test_parse_url_without_query: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
 // URL parsing tests - with fragment
 
-let test_parse_url_with_fragment: fn() -> void = fn() -> void {
+test "parse_url extracts fragment" {
     let result: Result[Url, HttpError] = parse_url("https://example.com/page#section")
     var is_valid: bool
     match result {
@@ -210,10 +197,9 @@ let test_parse_url_with_fragment: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_parse_url_without_fragment: fn() -> void = fn() -> void {
+test "parse_url has None fragment when not specified" {
     let result: Result[Url, HttpError] = parse_url("https://example.com/path")
     var is_valid: bool
     match result {
@@ -226,12 +212,11 @@ let test_parse_url_without_fragment: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
 // URL parsing tests - complete URL
 
-let test_parse_url_complete: fn() -> void = fn() -> void {
+test "parse_url parses complete URL" {
     let result: Result[Url, HttpError] = parse_url("https://api.example.com:8080/v1/users?id=123#details")
     var is_valid: bool
     match result {
@@ -261,12 +246,11 @@ let test_parse_url_complete: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
 // URL building tests - round-trips
 
-let test_build_url_simple: fn() -> void = fn() -> void {
+test "build_url creates simple URL" {
     let url: Url = Url {
         scheme: "https",
         host: "example.com",
@@ -277,10 +261,9 @@ let test_build_url_simple: fn() -> void = fn() -> void {
     }
     let result: string = build_url(url)
     assert(result == "https://example.com/")
-    return
 }
 
-let test_build_url_with_port: fn() -> void = fn() -> void {
+test "build_url includes port" {
     let url: Url = Url {
         scheme: "https",
         host: "example.com",
@@ -291,10 +274,9 @@ let test_build_url_with_port: fn() -> void = fn() -> void {
     }
     let result: string = build_url(url)
     assert(result == "https://example.com:8080/api")
-    return
 }
 
-let test_build_url_with_query: fn() -> void = fn() -> void {
+test "build_url includes query" {
     let url: Url = Url {
         scheme: "https",
         host: "example.com",
@@ -305,10 +287,9 @@ let test_build_url_with_query: fn() -> void = fn() -> void {
     }
     let result: string = build_url(url)
     assert(result == "https://example.com/search?q=kira")
-    return
 }
 
-let test_build_url_with_fragment: fn() -> void = fn() -> void {
+test "build_url includes fragment" {
     let url: Url = Url {
         scheme: "https",
         host: "example.com",
@@ -319,10 +300,9 @@ let test_build_url_with_fragment: fn() -> void = fn() -> void {
     }
     let result: string = build_url(url)
     assert(result == "https://example.com/page#section")
-    return
 }
 
-let test_build_url_complete: fn() -> void = fn() -> void {
+test "build_url creates complete URL" {
     let url: Url = Url {
         scheme: "https",
         host: "api.example.com",
@@ -333,10 +313,9 @@ let test_build_url_complete: fn() -> void = fn() -> void {
     }
     let result: string = build_url(url)
     assert(result == "https://api.example.com:8080/v1/users?id=123#details")
-    return
 }
 
-let test_parse_build_roundtrip: fn() -> void = fn() -> void {
+test "parse and build roundtrip preserves URL" {
     let original: string = "https://example.com:8080/path?query=value#fragment"
     let parse_result: Result[Url, HttpError] = parse_url(original)
     var is_valid: bool
@@ -348,10 +327,9 @@ let test_parse_build_roundtrip: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_parse_build_roundtrip_minimal: fn() -> void = fn() -> void {
+test "parse and build roundtrip for minimal URL" {
     let original: string = "http://localhost/"
     let parse_result: Result[Url, HttpError] = parse_url(original)
     var is_valid: bool
@@ -363,12 +341,11 @@ let test_parse_build_roundtrip_minimal: fn() -> void = fn() -> void {
         Err(_) => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
 // Query parameter extraction tests
 
-let test_parse_query_string_single: fn() -> void = fn() -> void {
+test "parse_query_string parses single param" {
     let params: List[QueryParam] = parse_query_string("key=value")
     var is_valid: bool
     match params {
@@ -378,10 +355,9 @@ let test_parse_query_string_single: fn() -> void = fn() -> void {
         _ => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_parse_query_string_multiple: fn() -> void = fn() -> void {
+test "parse_query_string parses multiple params" {
     let params: List[QueryParam] = parse_query_string("a=1&b=2&c=3")
     var count: i32 = 0
     var current: List[QueryParam] = params
@@ -398,10 +374,9 @@ let test_parse_query_string_multiple: fn() -> void = fn() -> void {
         }
     }
     assert(count == 3)
-    return
 }
 
-let test_parse_query_string_empty: fn() -> void = fn() -> void {
+test "parse_query_string handles empty string" {
     let params: List[QueryParam] = parse_query_string("")
     var is_empty: bool
     match params {
@@ -409,10 +384,9 @@ let test_parse_query_string_empty: fn() -> void = fn() -> void {
         Cons(_, _) => { is_empty = false }
     }
     assert(is_empty)
-    return
 }
 
-let test_parse_query_string_key_no_value: fn() -> void = fn() -> void {
+test "parse_query_string handles key without value" {
     let params: List[QueryParam] = parse_query_string("flag")
     var is_valid: bool
     match params {
@@ -422,10 +396,9 @@ let test_parse_query_string_key_no_value: fn() -> void = fn() -> void {
         _ => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_get_query_param_existing: fn() -> void = fn() -> void {
+test "get_query_param finds existing param" {
     let params: List[QueryParam] = parse_query_string("name=kira&version=1")
     let result: Option[string] = get_query_param(params, "name")
     var is_valid: bool
@@ -434,10 +407,9 @@ let test_get_query_param_existing: fn() -> void = fn() -> void {
         None => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_get_query_param_not_found: fn() -> void = fn() -> void {
+test "get_query_param returns None for missing param" {
     let params: List[QueryParam] = parse_query_string("name=kira")
     let result: Option[string] = get_query_param(params, "missing")
     var is_not_found: bool
@@ -446,10 +418,9 @@ let test_get_query_param_not_found: fn() -> void = fn() -> void {
         None => { is_not_found = true }
     }
     assert(is_not_found)
-    return
 }
 
-let test_get_query_params_multiple_values: fn() -> void = fn() -> void {
+test "get_query_params finds multiple values" {
     let params: List[QueryParam] = parse_query_string("tag=a&tag=b&tag=c")
     let result: List[string] = get_query_params(params, "tag")
     var count: i32 = 0
@@ -467,10 +438,9 @@ let test_get_query_params_multiple_values: fn() -> void = fn() -> void {
         }
     }
     assert(count == 3)
-    return
 }
 
-let test_get_query_params_single_value: fn() -> void = fn() -> void {
+test "get_query_params returns single value" {
     let params: List[QueryParam] = parse_query_string("name=kira")
     let result: List[string] = get_query_params(params, "name")
     var is_valid: bool
@@ -479,10 +449,9 @@ let test_get_query_params_single_value: fn() -> void = fn() -> void {
         _ => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_get_query_params_not_found: fn() -> void = fn() -> void {
+test "get_query_params returns empty for missing param" {
     let params: List[QueryParam] = parse_query_string("name=kira")
     let result: List[string] = get_query_params(params, "missing")
     var is_empty: bool
@@ -491,12 +460,11 @@ let test_get_query_params_not_found: fn() -> void = fn() -> void {
         Cons(_, _) => { is_empty = false }
     }
     assert(is_empty)
-    return
 }
 
 // Path parameter extraction tests
 
-let test_extract_path_param_simple: fn() -> void = fn() -> void {
+test "extract_path_param extracts simple param" {
     let result: Option[string] = extract_path_param("/users/:id", "/users/123", "id")
     var is_valid: bool
     match result {
@@ -504,10 +472,9 @@ let test_extract_path_param_simple: fn() -> void = fn() -> void {
         None => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_extract_path_param_nested: fn() -> void = fn() -> void {
+test "extract_path_param extracts nested param" {
     let result: Option[string] = extract_path_param("/posts/:postId/comments/:commentId", "/posts/42/comments/7", "commentId")
     var is_valid: bool
     match result {
@@ -515,10 +482,9 @@ let test_extract_path_param_nested: fn() -> void = fn() -> void {
         None => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_extract_path_param_first_of_multiple: fn() -> void = fn() -> void {
+test "extract_path_param extracts first of multiple params" {
     let result: Option[string] = extract_path_param("/posts/:postId/comments/:commentId", "/posts/42/comments/7", "postId")
     var is_valid: bool
     match result {
@@ -526,10 +492,9 @@ let test_extract_path_param_first_of_multiple: fn() -> void = fn() -> void {
         None => { is_valid = false }
     }
     assert(is_valid)
-    return
 }
 
-let test_extract_path_param_not_found: fn() -> void = fn() -> void {
+test "extract_path_param returns None for wrong param name" {
     let result: Option[string] = extract_path_param("/users/:id", "/users/123", "userId")
     var is_not_found: bool
     match result {
@@ -537,10 +502,9 @@ let test_extract_path_param_not_found: fn() -> void = fn() -> void {
         None => { is_not_found = true }
     }
     assert(is_not_found)
-    return
 }
 
-let test_extract_path_param_no_params: fn() -> void = fn() -> void {
+test "extract_path_param returns None for path without params" {
     let result: Option[string] = extract_path_param("/users/list", "/users/list", "id")
     var is_not_found: bool
     match result {
@@ -548,44 +512,37 @@ let test_extract_path_param_no_params: fn() -> void = fn() -> void {
         None => { is_not_found = true }
     }
     assert(is_not_found)
-    return
 }
 
 // Path matching tests
 
-let test_path_matches_exact: fn() -> void = fn() -> void {
+test "path_matches exact path" {
     assert(path_matches("/users", "/users") == true)
-    return
 }
 
-let test_path_matches_with_param: fn() -> void = fn() -> void {
+test "path_matches path with param" {
     assert(path_matches("/users/:id", "/users/123") == true)
-    return
 }
 
-let test_path_matches_with_multiple_params: fn() -> void = fn() -> void {
+test "path_matches path with multiple params" {
     assert(path_matches("/posts/:postId/comments/:commentId", "/posts/42/comments/7") == true)
-    return
 }
 
-let test_path_matches_different_length_false: fn() -> void = fn() -> void {
+test "path_matches returns false for different length" {
     assert(path_matches("/users/:id", "/users/123/extra") == false)
-    return
 }
 
-let test_path_matches_different_segment_false: fn() -> void = fn() -> void {
+test "path_matches returns false for different segment" {
     assert(path_matches("/users/:id", "/posts/123") == false)
-    return
 }
 
-let test_path_matches_root: fn() -> void = fn() -> void {
+test "path_matches root path" {
     assert(path_matches("/", "/") == true)
-    return
 }
 
 // Invalid URL handling tests
 
-let test_parse_url_empty: fn() -> void = fn() -> void {
+test "parse_url fails for empty string" {
     let result: Result[Url, HttpError] = parse_url("")
     var is_error: bool
     match result {
@@ -593,10 +550,9 @@ let test_parse_url_empty: fn() -> void = fn() -> void {
         Err(_) => { is_error = true }
     }
     assert(is_error)
-    return
 }
 
-let test_parse_url_missing_scheme: fn() -> void = fn() -> void {
+test "parse_url fails for missing scheme" {
     let result: Result[Url, HttpError] = parse_url("example.com/path")
     var is_error: bool
     match result {
@@ -604,10 +560,9 @@ let test_parse_url_missing_scheme: fn() -> void = fn() -> void {
         Err(_) => { is_error = true }
     }
     assert(is_error)
-    return
 }
 
-let test_parse_url_empty_scheme: fn() -> void = fn() -> void {
+test "parse_url fails for empty scheme" {
     let result: Result[Url, HttpError] = parse_url("://example.com")
     var is_error: bool
     match result {
@@ -615,10 +570,9 @@ let test_parse_url_empty_scheme: fn() -> void = fn() -> void {
         Err(_) => { is_error = true }
     }
     assert(is_error)
-    return
 }
 
-let test_parse_url_missing_host: fn() -> void = fn() -> void {
+test "parse_url fails for missing host" {
     let result: Result[Url, HttpError] = parse_url("https:///path")
     var is_error: bool
     match result {
@@ -626,10 +580,9 @@ let test_parse_url_missing_host: fn() -> void = fn() -> void {
         Err(_) => { is_error = true }
     }
     assert(is_error)
-    return
 }
 
-let test_parse_url_invalid_port_letters: fn() -> void = fn() -> void {
+test "parse_url fails for invalid port letters" {
     let result: Result[Url, HttpError] = parse_url("https://example.com:abc/path")
     var is_error: bool
     match result {
@@ -637,10 +590,9 @@ let test_parse_url_invalid_port_letters: fn() -> void = fn() -> void {
         Err(_) => { is_error = true }
     }
     assert(is_error)
-    return
 }
 
-let test_parse_url_port_out_of_range: fn() -> void = fn() -> void {
+test "parse_url fails for port out of range" {
     let result: Result[Url, HttpError] = parse_url("https://example.com:70000/path")
     var is_error: bool
     match result {
@@ -648,10 +600,9 @@ let test_parse_url_port_out_of_range: fn() -> void = fn() -> void {
         Err(_) => { is_error = true }
     }
     assert(is_error)
-    return
 }
 
-let test_parse_url_negative_port: fn() -> void = fn() -> void {
+test "parse_url fails for negative port" {
     let result: Result[Url, HttpError] = parse_url("https://example.com:-1/path")
     var is_error: bool
     match result {
@@ -659,5 +610,4 @@ let test_parse_url_negative_port: fn() -> void = fn() -> void {
         Err(_) => { is_error = true }
     }
     assert(is_error)
-    return
 }

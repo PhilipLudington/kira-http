@@ -13,7 +13,6 @@ kira-http is an HTTP client/server library for the Kira programming language. It
 **Dependencies:**
 - kira-json (JSON serialization)
 - kira-pcl (URL parsing)
-- kira-test (testing framework) - located at `/Users/mrphil/Fun/kira-test`
 
 ## Kira Language Essentials
 
@@ -60,13 +59,14 @@ Available Claude Code skills for this project:
 
 ## Running Tests
 
-Tests use the kira-test framework. Each test file has a `main` function that runs all test suites:
+Tests use Kira's built-in test system. Tests are defined with the `test "description" { ... }` syntax:
 
 ```bash
-kira run tests/test_types.ki      # Run type tests
-kira run tests/test_url.ki        # Run URL tests
-kira run tests/test_router.ki     # Run router tests
-kira run tests/test_middleware.ki # Run middleware tests
+kira test tests/test_types.ki      # Run type tests
+kira test tests/test_url.ki        # Run URL tests
+kira test tests/test_router.ki     # Run router tests
+kira test tests/test_middleware.ki # Run middleware tests
+kira test tests/                   # Run all tests
 ```
 
 **Note:** Requires Kira v0.2.0+ with module system support (`import` statements).

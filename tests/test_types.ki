@@ -10,141 +10,119 @@ import http.headers.{get_header, set_header, remove_header, content_type, author
 
 // Status code conversion tests
 
-let test_status_code_ok: fn() -> void = fn() -> void {
+test "status_code returns 200 for OK" {
     assert(status_code(OK) == 200)
-    return
 }
 
-let test_status_code_created: fn() -> void = fn() -> void {
+test "status_code returns 201 for Created" {
     assert(status_code(Created) == 201)
-    return
 }
 
-let test_status_code_accepted: fn() -> void = fn() -> void {
+test "status_code returns 202 for Accepted" {
     assert(status_code(Accepted) == 202)
-    return
 }
 
-let test_status_code_no_content: fn() -> void = fn() -> void {
+test "status_code returns 204 for NoContent" {
     assert(status_code(NoContent) == 204)
-    return
 }
 
-let test_status_code_moved_permanently: fn() -> void = fn() -> void {
+test "status_code returns 301 for MovedPermanently" {
     assert(status_code(MovedPermanently) == 301)
-    return
 }
 
-let test_status_code_found: fn() -> void = fn() -> void {
+test "status_code returns 302 for Found" {
     assert(status_code(Found) == 302)
-    return
 }
 
-let test_status_code_not_modified: fn() -> void = fn() -> void {
+test "status_code returns 304 for NotModified" {
     assert(status_code(NotModified) == 304)
-    return
 }
 
-let test_status_code_bad_request: fn() -> void = fn() -> void {
+test "status_code returns 400 for BadRequest" {
     assert(status_code(BadRequest) == 400)
-    return
 }
 
-let test_status_code_unauthorized: fn() -> void = fn() -> void {
+test "status_code returns 401 for Unauthorized" {
     assert(status_code(Unauthorized) == 401)
-    return
 }
 
-let test_status_code_forbidden: fn() -> void = fn() -> void {
+test "status_code returns 403 for Forbidden" {
     assert(status_code(Forbidden) == 403)
-    return
 }
 
-let test_status_code_not_found: fn() -> void = fn() -> void {
+test "status_code returns 404 for NotFound" {
     assert(status_code(NotFound) == 404)
-    return
 }
 
-let test_status_code_method_not_allowed: fn() -> void = fn() -> void {
+test "status_code returns 405 for MethodNotAllowed" {
     assert(status_code(MethodNotAllowed) == 405)
-    return
 }
 
-let test_status_code_conflict: fn() -> void = fn() -> void {
+test "status_code returns 409 for Conflict" {
     assert(status_code(Conflict) == 409)
-    return
 }
 
-let test_status_code_internal_error: fn() -> void = fn() -> void {
+test "status_code returns 500 for InternalError" {
     assert(status_code(InternalError) == 500)
-    return
 }
 
-let test_status_code_not_implemented: fn() -> void = fn() -> void {
+test "status_code returns 501 for NotImplemented" {
     assert(status_code(NotImplemented) == 501)
-    return
 }
 
-let test_status_code_bad_gateway: fn() -> void = fn() -> void {
+test "status_code returns 502 for BadGateway" {
     assert(status_code(BadGateway) == 502)
-    return
 }
 
-let test_status_code_service_unavailable: fn() -> void = fn() -> void {
+test "status_code returns 503 for ServiceUnavailable" {
     assert(status_code(ServiceUnavailable) == 503)
-    return
 }
 
-let test_status_code_custom: fn() -> void = fn() -> void {
+test "status_code returns custom value for Custom" {
     assert(status_code(Custom(418)) == 418)
-    return
 }
 
 // Status from code conversion tests
 
-let test_status_from_code_200: fn() -> void = fn() -> void {
+test "status_from_code 200 returns OK" {
     var matches: bool
     match status_from_code(200) {
         OK => { matches = true }
         _ => { matches = false }
     }
     assert(matches)
-    return
 }
 
-let test_status_from_code_404: fn() -> void = fn() -> void {
+test "status_from_code 404 returns NotFound" {
     var matches: bool
     match status_from_code(404) {
         NotFound => { matches = true }
         _ => { matches = false }
     }
     assert(matches)
-    return
 }
 
-let test_status_from_code_500: fn() -> void = fn() -> void {
+test "status_from_code 500 returns InternalError" {
     var matches: bool
     match status_from_code(500) {
         InternalError => { matches = true }
         _ => { matches = false }
     }
     assert(matches)
-    return
 }
 
-let test_status_from_code_unknown: fn() -> void = fn() -> void {
+test "status_from_code unknown returns Custom" {
     var matches: bool
     match status_from_code(418) {
         Custom(418) => { matches = true }
         _ => { matches = false }
     }
     assert(matches)
-    return
 }
 
 // Round-trip tests
 
-let test_status_code_roundtrip_ok: fn() -> void = fn() -> void {
+test "status_code roundtrip for OK" {
     let code: i32 = status_code(OK)
     var matches: bool
     match status_from_code(code) {
@@ -152,10 +130,9 @@ let test_status_code_roundtrip_ok: fn() -> void = fn() -> void {
         _ => { matches = false }
     }
     assert(matches)
-    return
 }
 
-let test_status_code_roundtrip_not_found: fn() -> void = fn() -> void {
+test "status_code roundtrip for NotFound" {
     let code: i32 = status_code(NotFound)
     var matches: bool
     match status_from_code(code) {
@@ -163,10 +140,9 @@ let test_status_code_roundtrip_not_found: fn() -> void = fn() -> void {
         _ => { matches = false }
     }
     assert(matches)
-    return
 }
 
-let test_status_code_roundtrip_custom: fn() -> void = fn() -> void {
+test "status_code roundtrip for Custom" {
     let code: i32 = status_code(Custom(418))
     var matches: bool
     match status_from_code(code) {
@@ -174,141 +150,115 @@ let test_status_code_roundtrip_custom: fn() -> void = fn() -> void {
         _ => { matches = false }
     }
     assert(matches)
-    return
 }
 
 // Status category tests
 
-let test_is_success_ok: fn() -> void = fn() -> void {
+test "is_success true for OK" {
     assert(is_success(OK) == true)
-    return
 }
 
-let test_is_success_created: fn() -> void = fn() -> void {
+test "is_success true for Created" {
     assert(is_success(Created) == true)
-    return
 }
 
-let test_is_success_no_content: fn() -> void = fn() -> void {
+test "is_success true for NoContent" {
     assert(is_success(NoContent) == true)
-    return
 }
 
-let test_is_success_not_found_false: fn() -> void = fn() -> void {
+test "is_success false for NotFound" {
     assert(is_success(NotFound) == false)
-    return
 }
 
-let test_is_success_internal_error_false: fn() -> void = fn() -> void {
+test "is_success false for InternalError" {
     assert(is_success(InternalError) == false)
-    return
 }
 
-let test_is_redirect_moved_permanently: fn() -> void = fn() -> void {
+test "is_redirect true for MovedPermanently" {
     assert(is_redirect(MovedPermanently) == true)
-    return
 }
 
-let test_is_redirect_found: fn() -> void = fn() -> void {
+test "is_redirect true for Found" {
     assert(is_redirect(Found) == true)
-    return
 }
 
-let test_is_redirect_not_modified: fn() -> void = fn() -> void {
+test "is_redirect true for NotModified" {
     assert(is_redirect(NotModified) == true)
-    return
 }
 
-let test_is_redirect_ok_false: fn() -> void = fn() -> void {
+test "is_redirect false for OK" {
     assert(is_redirect(OK) == false)
-    return
 }
 
-let test_is_client_error_bad_request: fn() -> void = fn() -> void {
+test "is_client_error true for BadRequest" {
     assert(is_client_error(BadRequest) == true)
-    return
 }
 
-let test_is_client_error_unauthorized: fn() -> void = fn() -> void {
+test "is_client_error true for Unauthorized" {
     assert(is_client_error(Unauthorized) == true)
-    return
 }
 
-let test_is_client_error_not_found: fn() -> void = fn() -> void {
+test "is_client_error true for NotFound" {
     assert(is_client_error(NotFound) == true)
-    return
 }
 
-let test_is_client_error_ok_false: fn() -> void = fn() -> void {
+test "is_client_error false for OK" {
     assert(is_client_error(OK) == false)
-    return
 }
 
-let test_is_client_error_internal_error_false: fn() -> void = fn() -> void {
+test "is_client_error false for InternalError" {
     assert(is_client_error(InternalError) == false)
-    return
 }
 
-let test_is_server_error_internal_error: fn() -> void = fn() -> void {
+test "is_server_error true for InternalError" {
     assert(is_server_error(InternalError) == true)
-    return
 }
 
-let test_is_server_error_not_implemented: fn() -> void = fn() -> void {
+test "is_server_error true for NotImplemented" {
     assert(is_server_error(NotImplemented) == true)
-    return
 }
 
-let test_is_server_error_bad_gateway: fn() -> void = fn() -> void {
+test "is_server_error true for BadGateway" {
     assert(is_server_error(BadGateway) == true)
-    return
 }
 
-let test_is_server_error_service_unavailable: fn() -> void = fn() -> void {
+test "is_server_error true for ServiceUnavailable" {
     assert(is_server_error(ServiceUnavailable) == true)
-    return
 }
 
-let test_is_server_error_ok_false: fn() -> void = fn() -> void {
+test "is_server_error false for OK" {
     assert(is_server_error(OK) == false)
-    return
 }
 
-let test_is_server_error_not_found_false: fn() -> void = fn() -> void {
+test "is_server_error false for NotFound" {
     assert(is_server_error(NotFound) == false)
-    return
 }
 
 // Custom status category tests
 
-let test_is_success_custom_200: fn() -> void = fn() -> void {
+test "is_success true for Custom 200" {
     assert(is_success(Custom(200)) == true)
-    return
 }
 
-let test_is_success_custom_299: fn() -> void = fn() -> void {
+test "is_success true for Custom 299" {
     assert(is_success(Custom(299)) == true)
-    return
 }
 
-let test_is_redirect_custom_301: fn() -> void = fn() -> void {
+test "is_redirect true for Custom 301" {
     assert(is_redirect(Custom(301)) == true)
-    return
 }
 
-let test_is_client_error_custom_418: fn() -> void = fn() -> void {
+test "is_client_error true for Custom 418" {
     assert(is_client_error(Custom(418)) == true)
-    return
 }
 
-let test_is_server_error_custom_599: fn() -> void = fn() -> void {
+test "is_server_error true for Custom 599" {
     assert(is_server_error(Custom(599)) == true)
-    return
 }
 
 // Header manipulation tests
 
-let test_get_header_existing: fn() -> void = fn() -> void {
+test "get_header finds existing header" {
     let headers: Headers = Cons(
         Header { name: "Content-Type", value: "application/json" },
         Cons(
@@ -322,10 +272,9 @@ let test_get_header_existing: fn() -> void = fn() -> void {
         None => { found = false }
     }
     assert(found)
-    return
 }
 
-let test_get_header_case_insensitive: fn() -> void = fn() -> void {
+test "get_header is case insensitive" {
     let headers: Headers = Cons(
         Header { name: "Content-Type", value: "application/json" },
         Nil
@@ -336,10 +285,9 @@ let test_get_header_case_insensitive: fn() -> void = fn() -> void {
         None => { found = false }
     }
     assert(found)
-    return
 }
 
-let test_get_header_not_found: fn() -> void = fn() -> void {
+test "get_header returns None for missing header" {
     let headers: Headers = Cons(
         Header { name: "Content-Type", value: "application/json" },
         Nil
@@ -350,10 +298,9 @@ let test_get_header_not_found: fn() -> void = fn() -> void {
         None => { not_found = true }
     }
     assert(not_found)
-    return
 }
 
-let test_get_header_empty_list: fn() -> void = fn() -> void {
+test "get_header returns None for empty list" {
     let headers: Headers = Nil
     var not_found: bool
     match get_header(headers, "Content-Type") {
@@ -361,10 +308,9 @@ let test_get_header_empty_list: fn() -> void = fn() -> void {
         None => { not_found = true }
     }
     assert(not_found)
-    return
 }
 
-let test_set_header_new: fn() -> void = fn() -> void {
+test "set_header adds new header" {
     let headers: Headers = Nil
     let result: Headers = set_header(headers, "Content-Type", "application/json")
     var found: bool
@@ -373,10 +319,9 @@ let test_set_header_new: fn() -> void = fn() -> void {
         None => { found = false }
     }
     assert(found)
-    return
 }
 
-let test_set_header_replace: fn() -> void = fn() -> void {
+test "set_header replaces existing header" {
     let headers: Headers = Cons(
         Header { name: "Content-Type", value: "text/plain" },
         Nil
@@ -388,10 +333,9 @@ let test_set_header_replace: fn() -> void = fn() -> void {
         None => { found = false }
     }
     assert(found)
-    return
 }
 
-let test_remove_header_existing: fn() -> void = fn() -> void {
+test "remove_header removes existing header" {
     let headers: Headers = Cons(
         Header { name: "Content-Type", value: "application/json" },
         Cons(
@@ -406,10 +350,9 @@ let test_remove_header_existing: fn() -> void = fn() -> void {
         None => { not_found = true }
     }
     assert(not_found)
-    return
 }
 
-let test_remove_header_keeps_others: fn() -> void = fn() -> void {
+test "remove_header keeps other headers" {
     let headers: Headers = Cons(
         Header { name: "Content-Type", value: "application/json" },
         Cons(
@@ -424,10 +367,9 @@ let test_remove_header_keeps_others: fn() -> void = fn() -> void {
         None => { found = false }
     }
     assert(found)
-    return
 }
 
-let test_remove_header_case_insensitive: fn() -> void = fn() -> void {
+test "remove_header is case insensitive" {
     let headers: Headers = Cons(
         Header { name: "Content-Type", value: "application/json" },
         Nil
@@ -439,10 +381,9 @@ let test_remove_header_case_insensitive: fn() -> void = fn() -> void {
         None => { not_found = true }
     }
     assert(not_found)
-    return
 }
 
-let test_remove_header_not_existing: fn() -> void = fn() -> void {
+test "remove_header handles non-existing header" {
     let headers: Headers = Cons(
         Header { name: "Content-Type", value: "application/json" },
         Nil
@@ -454,28 +395,24 @@ let test_remove_header_not_existing: fn() -> void = fn() -> void {
         None => { found = false }
     }
     assert(found)
-    return
 }
 
 // Header helper function tests
 
-let test_content_type_creates_header: fn() -> void = fn() -> void {
+test "content_type creates correct header" {
     let header: Header = content_type("application/json")
     assert(header.name == "Content-Type")
     assert(header.value == "application/json")
-    return
 }
 
-let test_authorization_creates_header: fn() -> void = fn() -> void {
+test "authorization creates correct header" {
     let header: Header = authorization("Bearer token123")
     assert(header.name == "Authorization")
     assert(header.value == "Bearer token123")
-    return
 }
 
-let test_accept_creates_header: fn() -> void = fn() -> void {
+test "accept creates correct header" {
     let header: Header = accept("text/html")
     assert(header.name == "Accept")
     assert(header.value == "text/html")
-    return
 }

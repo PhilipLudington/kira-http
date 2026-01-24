@@ -10,8 +10,7 @@ import http.request.{Request, RequestBuilder, new_request, with_header, with_bod
 import http.response.{Response}
 import http.types.{Method, Status, HttpError, Headers}
 
-/// Test that get() rejects empty URLs
-effect fn test_get_empty_url() -> IO[void] {
+test "get rejects empty URL" {
     let result: Result[Response, HttpError] = get("")
 
     var is_invalid_url: bool
@@ -22,11 +21,9 @@ effect fn test_get_empty_url() -> IO[void] {
     }
 
     assert(is_invalid_url, "Empty URL should return InvalidUrl error")
-    return
 }
 
-/// Test that get() rejects URLs without valid scheme
-effect fn test_get_invalid_scheme() -> IO[void] {
+test "get rejects invalid scheme" {
     let result: Result[Response, HttpError] = get("ftp://example.com")
 
     var is_invalid_url: bool
@@ -37,11 +34,9 @@ effect fn test_get_invalid_scheme() -> IO[void] {
     }
 
     assert(is_invalid_url, "FTP URL should return InvalidUrl error")
-    return
 }
 
-/// Test that get() rejects malformed URLs
-effect fn test_get_malformed_url() -> IO[void] {
+test "get rejects malformed URL" {
     let result: Result[Response, HttpError] = get("not-a-url")
 
     var is_invalid_url: bool
@@ -52,18 +47,21 @@ effect fn test_get_malformed_url() -> IO[void] {
     }
 
     assert(is_invalid_url, "Malformed URL should return InvalidUrl error")
-    return
 }
 
-/// Test that post() builds request correctly with body
-effect fn test_post_with_body() -> IO[void] {
+test "post builds request with body" {
     // Test that the request builder works correctly
     let b1: RequestBuilder = new_request(POST, "https://example.com/api")
     let builder: RequestBuilder = with_body(b1, "test body")
 
     let req: Request = build(builder)
 
-    assert(req.method == POST, "Method should be POST")
+    var is_post: bool
+    match req.method {
+        POST => { is_post = true }
+        _ => { is_post = false }
+    }
+    assert(is_post, "Method should be POST")
     assert(req.url == "https://example.com/api", "URL should match")
 
     var has_body: bool
@@ -72,17 +70,20 @@ effect fn test_post_with_body() -> IO[void] {
         None => { has_body = false }
     }
     assert(has_body, "Body should be set")
-    return
 }
 
-/// Test that put() builds request correctly with body
-effect fn test_put_with_body() -> IO[void] {
+test "put builds request with body" {
     let b1: RequestBuilder = new_request(PUT, "https://example.com/api/1")
     let builder: RequestBuilder = with_body(b1, "updated data")
 
     let req: Request = build(builder)
 
-    assert(req.method == PUT, "Method should be PUT")
+    var is_put: bool
+    match req.method {
+        PUT => { is_put = true }
+        _ => { is_put = false }
+    }
+    assert(is_put, "Method should be PUT")
 
     var has_body: bool
     match req.body {
@@ -90,15 +91,18 @@ effect fn test_put_with_body() -> IO[void] {
         None => { has_body = false }
     }
     assert(has_body, "Body should be set")
-    return
 }
 
-/// Test that delete() builds request correctly
-effect fn test_delete_request() -> IO[void] {
+test "delete builds request without body" {
     let builder: RequestBuilder = new_request(DELETE, "https://example.com/api/1")
     let req: Request = build(builder)
 
-    assert(req.method == DELETE, "Method should be DELETE")
+    var is_delete: bool
+    match req.method {
+        DELETE => { is_delete = true }
+        _ => { is_delete = false }
+    }
+    assert(is_delete, "Method should be DELETE")
 
     var has_no_body: bool
     match req.body {
@@ -106,11 +110,9 @@ effect fn test_delete_request() -> IO[void] {
         None => { has_no_body = true }
     }
     assert(has_no_body, "DELETE should have no body by default")
-    return
 }
 
-/// Test that request builder with headers works
-effect fn test_request_builder_with_headers() -> IO[void] {
+test "request builder with headers" {
     let b1: RequestBuilder = new_request(GET, "https://example.com/api")
     let b2: RequestBuilder = with_header(b1, "Authorization", "Bearer token123")
     let builder: RequestBuilder = with_header(b2, "Accept", "application/json")
@@ -147,11 +149,9 @@ effect fn test_request_builder_with_headers() -> IO[void] {
 
     assert(has_auth, "Should have Authorization header")
     assert(has_accept, "Should have Accept header")
-    return
 }
 
-/// Test that request builder with timeout works
-effect fn test_request_builder_with_timeout() -> IO[void] {
+test "request builder with timeout" {
     let b1: RequestBuilder = new_request(GET, "https://example.com/api")
     let builder: RequestBuilder = with_timeout(b1, 5000)
 
@@ -162,11 +162,9 @@ effect fn test_request_builder_with_timeout() -> IO[void] {
     }
 
     assert(has_timeout, "Timeout should be set to 5000ms")
-    return
 }
 
-/// Test post_json sets correct content type
-effect fn test_post_json_content_type() -> IO[void] {
+test "post_json sets content type" {
     let b1: RequestBuilder = new_request(POST, "https://example.com/api")
     let b2: RequestBuilder = with_header(b1, "Content-Type", "application/json")
     let builder: RequestBuilder = with_body(b2, "{\"name\": \"test\"}")
@@ -194,35 +192,44 @@ effect fn test_post_json_content_type() -> IO[void] {
     }
 
     assert(has_json_content_type, "Should have application/json content type")
-    return
 }
 
-/// Test head request has correct method
-effect fn test_head_request() -> IO[void] {
+test "head request has correct method" {
     let builder: RequestBuilder = new_request(HEAD, "https://example.com")
     let req: Request = build(builder)
 
-    assert(req.method == HEAD, "Method should be HEAD")
-    return
+    var is_head: bool
+    match req.method {
+        HEAD => { is_head = true }
+        _ => { is_head = false }
+    }
+    assert(is_head, "Method should be HEAD")
 }
 
-/// Test options request has correct method
-effect fn test_options_request() -> IO[void] {
+test "options request has correct method" {
     let builder: RequestBuilder = new_request(OPTIONS, "https://example.com")
     let req: Request = build(builder)
 
-    assert(req.method == OPTIONS, "Method should be OPTIONS")
-    return
+    var is_options: bool
+    match req.method {
+        OPTIONS => { is_options = true }
+        _ => { is_options = false }
+    }
+    assert(is_options, "Method should be OPTIONS")
 }
 
-/// Test patch request with body
-effect fn test_patch_with_body() -> IO[void] {
+test "patch builds request with body" {
     let b1: RequestBuilder = new_request(PATCH, "https://example.com/api/1")
     let builder: RequestBuilder = with_body(b1, "{\"field\": \"value\"}")
 
     let req: Request = build(builder)
 
-    assert(req.method == PATCH, "Method should be PATCH")
+    var is_patch: bool
+    match req.method {
+        PATCH => { is_patch = true }
+        _ => { is_patch = false }
+    }
+    assert(is_patch, "Method should be PATCH")
 
     var has_body: bool
     match req.body {
@@ -230,11 +237,9 @@ effect fn test_patch_with_body() -> IO[void] {
         None => { has_body = false }
     }
     assert(has_body, "PATCH should have body")
-    return
 }
 
-/// Test request URL validation - valid HTTP URL
-effect fn test_valid_http_url() -> IO[void] {
+test "valid http URL" {
     // Build a request with a valid HTTP URL
     let builder: RequestBuilder = new_request(GET, "http://example.com/path")
     let req: Request = build(builder)
@@ -242,21 +247,17 @@ effect fn test_valid_http_url() -> IO[void] {
     // URL validation happens at the request level
     let has_valid_scheme: bool = std.string.starts_with(req.url, "http://")
     assert(has_valid_scheme, "HTTP URLs should be valid")
-    return
 }
 
-/// Test request URL validation - valid HTTPS URL
-effect fn test_valid_https_url() -> IO[void] {
+test "valid https URL" {
     let builder: RequestBuilder = new_request(GET, "https://example.com/path")
     let req: Request = build(builder)
 
     let has_valid_scheme: bool = std.string.starts_with(req.url, "https://")
     assert(has_valid_scheme, "HTTPS URLs should be valid")
-    return
 }
 
-/// Test chained builder operations
-effect fn test_chained_builder() -> IO[void] {
+test "chained builder operations" {
     let b1: RequestBuilder = new_request(POST, "https://api.example.com/users")
     let b2: RequestBuilder = with_header(b1, "Content-Type", "application/json")
     let b3: RequestBuilder = with_header(b2, "Authorization", "Bearer abc123")
@@ -265,7 +266,12 @@ effect fn test_chained_builder() -> IO[void] {
 
     let req: Request = build(builder)
 
-    assert(req.method == POST, "Method should be POST")
+    var is_post: bool
+    match req.method {
+        POST => { is_post = true }
+        _ => { is_post = false }
+    }
+    assert(is_post, "Method should be POST")
     assert(req.url == "https://api.example.com/users", "URL should match")
 
     var has_body: bool
@@ -281,5 +287,4 @@ effect fn test_chained_builder() -> IO[void] {
         None => { has_timeout = false }
     }
     assert(has_timeout, "Timeout should be set")
-    return
 }
