@@ -1,0 +1,36 @@
+// tagging.ki: Test tagging and filtering support
+//
+// Functions for tagging tests and filtering by tags.
+
+module kira_test.tagging
+
+import kira_test.types.{TestCase}
+
+// =============================================================================
+// Tag Checking
+// =============================================================================
+
+/// Check if a test case has a specific tag.
+fn has_tag(tc: TestCase, tag: string) -> bool {
+    return std.list.any(tc.tags, fn(t: string) -> bool {
+        return t == tag
+    })
+}
+
+/// Check if a test case has any of the specified tags.
+fn has_any_tag(tc: TestCase, tags: List[string]) -> bool {
+    return std.list.any(tags, fn(tag: string) -> bool {
+        return has_tag(tc, tag)
+    })
+}
+
+// =============================================================================
+// Filtering
+// =============================================================================
+
+/// Filter a list of test cases to only those with any of the specified tags.
+fn filter_by_tags(tests: List[TestCase], tags: List[string]) -> List[TestCase] {
+    return std.list.filter(tests, fn(tc: TestCase) -> bool {
+        return has_any_tag(tc, tags)
+    })
+}

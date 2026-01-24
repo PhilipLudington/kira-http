@@ -1,0 +1,91 @@
+// types.ki: Core type definitions for kira-test framework
+//
+// Defines the fundamental ADTs used throughout the testing framework.
+
+module kira_test.types
+
+// =============================================================================
+// Assertion Result
+// =============================================================================
+
+/// Result of a single assertion - either passed or failed with a message.
+type AssertionResult =
+    | Passed
+    | Failed(string)
+
+// =============================================================================
+// Test Result
+// =============================================================================
+
+/// Result of running a single test case.
+type TestResult = {
+    name: string,
+    passed: bool,
+    message: string
+}
+
+/// Result of running a single test case with timing information.
+type TimedTestResult = {
+    name: string,
+    passed: bool,
+    message: string,
+    duration_ms: i64
+}
+
+// =============================================================================
+// Test Case
+// =============================================================================
+
+/// A single test case with a name, optional tags, and a test function.
+type TestCase = {
+    name: string,
+    tags: List[string],
+    run: fn() -> AssertionResult
+}
+
+// =============================================================================
+// Test Suite
+// =============================================================================
+
+/// A collection of test cases with optional lifecycle hooks.
+type TestSuite = {
+    name: string,
+    tests: List[TestCase],
+    setup: Option[fn() -> void],
+    teardown: Option[fn() -> void],
+    before_each: Option[fn() -> void],
+    after_each: Option[fn() -> void]
+}
+
+// =============================================================================
+// Run Configuration
+// =============================================================================
+
+/// Configuration options for running tests.
+type RunConfig = {
+    fail_fast: bool,
+    tags_filter: Option[List[string]]
+}
+
+// =============================================================================
+// Test Summary
+// =============================================================================
+
+/// Summary of running a test suite.
+type TestSummary = {
+    suite_name: string,
+    total: i32,
+    passed: i32,
+    failed: i32,
+    failures: List[TestResult]
+}
+
+/// Summary of running a test suite with timing information.
+type TimedTestSummary = {
+    suite_name: string,
+    total: i32,
+    passed: i32,
+    failed: i32,
+    failures: List[TimedTestResult],
+    total_duration_ms: i64
+}

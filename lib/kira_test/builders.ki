@@ -1,0 +1,74 @@
+// builders.ki: Test, suite, and config builders
+//
+// Factory functions for creating test cases, suites, and run configurations.
+
+module kira_test.builders
+
+import kira_test.types.{AssertionResult, TestCase, TestSuite, RunConfig}
+
+// =============================================================================
+// Test Case Builders
+// =============================================================================
+
+/// Create a test case with a name and test function.
+fn test(name: string, test_fn: fn() -> AssertionResult) -> TestCase {
+    return TestCase { name: name, tags: Nil, run: test_fn }
+}
+
+/// Create a test case with a name, tags, and test function.
+fn test_tagged(name: string, tags: List[string], test_fn: fn() -> AssertionResult) -> TestCase {
+    return TestCase { name: name, tags: tags, run: test_fn }
+}
+
+// =============================================================================
+// Test Suite Builders
+// =============================================================================
+
+/// Create a simple test suite with just a name and tests.
+fn suite(name: string, tests: List[TestCase]) -> TestSuite {
+    return TestSuite { name: name, tests: tests, setup: None, teardown: None, before_each: None, after_each: None }
+}
+
+/// Create a test suite with a setup function.
+fn suite_with_setup(name: string, tests: List[TestCase], setup: fn() -> void) -> TestSuite {
+    return TestSuite { name: name, tests: tests, setup: Some(setup), teardown: None, before_each: None, after_each: None }
+}
+
+/// Create a test suite with setup and teardown functions.
+fn suite_with_lifecycle(name: string, tests: List[TestCase], setup: fn() -> void, teardown: fn() -> void) -> TestSuite {
+    return TestSuite { name: name, tests: tests, setup: Some(setup), teardown: Some(teardown), before_each: None, after_each: None }
+}
+
+/// Create a test suite with before_each and after_each hooks.
+fn suite_with_each(name: string, tests: List[TestCase], before_each: fn() -> void, after_each: fn() -> void) -> TestSuite {
+    return TestSuite { name: name, tests: tests, setup: None, teardown: None, before_each: Some(before_each), after_each: Some(after_each) }
+}
+
+/// Create a test suite with all lifecycle hooks.
+fn suite_full(name: string, tests: List[TestCase], setup: fn() -> void, teardown: fn() -> void, before_each: fn() -> void, after_each: fn() -> void) -> TestSuite {
+    return TestSuite { name: name, tests: tests, setup: Some(setup), teardown: Some(teardown), before_each: Some(before_each), after_each: Some(after_each) }
+}
+
+// =============================================================================
+// Run Configuration Builders
+// =============================================================================
+
+/// Create default run configuration (no fail-fast, no tag filter).
+fn default_config() -> RunConfig {
+    return RunConfig { fail_fast: false, tags_filter: None }
+}
+
+/// Create run configuration with fail-fast enabled.
+fn config_fail_fast() -> RunConfig {
+    return RunConfig { fail_fast: true, tags_filter: None }
+}
+
+/// Create run configuration with tag filtering.
+fn config_with_tags(tags: List[string]) -> RunConfig {
+    return RunConfig { fail_fast: false, tags_filter: Some(tags) }
+}
+
+/// Create run configuration with all options.
+fn config_full(fail_fast: bool, tags: List[string]) -> RunConfig {
+    return RunConfig { fail_fast: fail_fast, tags_filter: Some(tags) }
+}
