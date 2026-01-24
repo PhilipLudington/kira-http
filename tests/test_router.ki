@@ -5,30 +5,10 @@
 
 module tests.test_router
 
-use http.types.Method
-use http.types.QueryParam
-use http.request.Request
-use http.request.path_param
-use http.response.Response
-use http.response.ok
-use http.response.not_found as not_found_response
-use http.router.Handler
-use http.router.Route
-use http.router.Router
-use http.router.new_router
-use http.router.add_route
-use http.router.add_routes
-use http.router.set_not_found
-use http.router.get
-use http.router.post
-use http.router.put
-use http.router.delete
-use http.router.patch
-use http.router.route
-use http.router.handle_request
-use http.router.get_method
-use http.router.get_path
-use http.router.route_count
+import http.types.{Method, QueryParam}
+import http.request.{Request, path_param}
+import http.response.{Response, ok, not_found as not_found_response}
+import http.router.{Handler, Route, Router, new_router, add_route, add_routes, set_not_found, get, post, put, delete, patch, route, handle_request, get_method, get_path, route_count}
 
 // Test handlers
 let home_handler: Handler = fn(req: Request) -> Response {
@@ -114,17 +94,15 @@ let test_new_router_empty: fn() -> void = fn() -> void {
 // ============================================================================
 
 let test_add_route_single: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> add_route(get("/", home_handler))
+    let router: Router = add_route(new_router(), get("/", home_handler))
     assert(route_count(router) == 1, "Router should have 1 route")
     return
 }
 
 let test_add_route_multiple: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> add_route(get("/", home_handler))
-        |> add_route(get("/users", users_handler))
-        |> add_route(post("/users", create_user_handler))
+    let r1: Router = add_route(new_router(), get("/", home_handler))
+    let r2: Router = add_route(r1, get("/users", users_handler))
+    let router: Router = add_route(r2, post("/users", create_user_handler))
     assert(route_count(router) == 3, "Router should have 3 routes")
     return
 }
@@ -140,8 +118,7 @@ let test_add_routes_list: fn() -> void = fn() -> void {
             )
         )
     )
-    let router: Router = new_router()
-        |> add_routes(routes)
+    let router: Router = add_routes(new_router(), routes)
     assert(route_count(router) == 3, "Router should have 3 routes from list")
     return
 }
@@ -208,8 +185,7 @@ let methods_match_test: fn(Method, Method) -> bool =
 // ============================================================================
 
 let test_match_exact_path_get: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> add_route(get("/users", users_handler))
+    let router: Router = add_route(new_router(), get("/users", users_handler))
 
     let request: Request = make_request(GET, "/users")
     let response: Response = handle_request(router, request)
@@ -219,8 +195,7 @@ let test_match_exact_path_get: fn() -> void = fn() -> void {
 }
 
 let test_match_exact_path_post: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> add_route(post("/users", create_user_handler))
+    let router: Router = add_route(new_router(), post("/users", create_user_handler))
 
     let request: Request = make_request(POST, "/users")
     let response: Response = handle_request(router, request)
@@ -230,8 +205,7 @@ let test_match_exact_path_post: fn() -> void = fn() -> void {
 }
 
 let test_match_method_mismatch: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> add_route(get("/users", users_handler))
+    let router: Router = add_route(new_router(), get("/users", users_handler))
 
     let request: Request = make_request(POST, "/users")
     let response: Response = handle_request(router, request)
@@ -241,8 +215,7 @@ let test_match_method_mismatch: fn() -> void = fn() -> void {
 }
 
 let test_match_path_mismatch: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> add_route(get("/users", users_handler))
+    let router: Router = add_route(new_router(), get("/users", users_handler))
 
     let request: Request = make_request(GET, "/posts")
     let response: Response = handle_request(router, request)
@@ -252,8 +225,7 @@ let test_match_path_mismatch: fn() -> void = fn() -> void {
 }
 
 let test_match_root_path: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> add_route(get("/", home_handler))
+    let router: Router = add_route(new_router(), get("/", home_handler))
 
     let request: Request = make_request(GET, "/")
     let response: Response = handle_request(router, request)
@@ -267,8 +239,7 @@ let test_match_root_path: fn() -> void = fn() -> void {
 // ============================================================================
 
 let test_path_param_single: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> add_route(get("/users/:id", user_handler))
+    let router: Router = add_route(new_router(), get("/users/:id", user_handler))
 
     let request: Request = make_request(GET, "/users/123")
     let response: Response = handle_request(router, request)
@@ -278,8 +249,7 @@ let test_path_param_single: fn() -> void = fn() -> void {
 }
 
 let test_path_param_string_value: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> add_route(get("/users/:id", user_handler))
+    let router: Router = add_route(new_router(), get("/users/:id", user_handler))
 
     let request: Request = make_request(GET, "/users/alice")
     let response: Response = handle_request(router, request)
@@ -289,8 +259,7 @@ let test_path_param_string_value: fn() -> void = fn() -> void {
 }
 
 let test_path_param_nested: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> add_route(get("/posts/:postId/comments/:commentId", nested_handler))
+    let router: Router = add_route(new_router(), get("/posts/:postId/comments/:commentId", nested_handler))
 
     let request: Request = make_request(GET, "/posts/42/comments/7")
     let response: Response = handle_request(router, request)
@@ -300,8 +269,7 @@ let test_path_param_nested: fn() -> void = fn() -> void {
 }
 
 let test_path_param_with_static_segments: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> add_route(get("/api/v1/users/:id/profile", user_handler))
+    let router: Router = add_route(new_router(), get("/api/v1/users/:id/profile", user_handler))
 
     let request: Request = make_request(GET, "/api/v1/users/999/profile")
     let response: Response = handle_request(router, request)
@@ -325,8 +293,7 @@ let test_not_found_default: fn() -> void = fn() -> void {
 }
 
 let test_not_found_custom: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> set_not_found(custom_not_found_handler)
+    let router: Router = set_not_found(new_router(), custom_not_found_handler)
 
     let request: Request = make_request(GET, "/nonexistent")
     let response: Response = handle_request(router, request)
@@ -347,9 +314,8 @@ let test_route_priority_first_match_wins: fn() -> void = fn() -> void {
         return ok("second")
     }
 
-    let router: Router = new_router()
-        |> add_route(get("/users/:id", first_handler))
-        |> add_route(get("/users/:id", second_handler))
+    let r1: Router = add_route(new_router(), get("/users/:id", first_handler))
+    let router: Router = add_route(r1, get("/users/:id", second_handler))
 
     let request: Request = make_request(GET, "/users/123")
     let response: Response = handle_request(router, request)
@@ -367,9 +333,8 @@ let test_route_priority_static_before_param: fn() -> void = fn() -> void {
     }
 
     // Add static route first, then param route
-    let router: Router = new_router()
-        |> add_route(get("/users/new", static_handler))
-        |> add_route(get("/users/:id", param_handler))
+    let r1: Router = add_route(new_router(), get("/users/new", static_handler))
+    let router: Router = add_route(r1, get("/users/:id", param_handler))
 
     let request_static: Request = make_request(GET, "/users/new")
     let response_static: Response = handle_request(router, request_static)
@@ -382,9 +347,8 @@ let test_route_priority_static_before_param: fn() -> void = fn() -> void {
 }
 
 let test_route_different_methods_same_path: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> add_route(get("/users", users_handler))
-        |> add_route(post("/users", create_user_handler))
+    let r1: Router = add_route(new_router(), get("/users", users_handler))
+    let router: Router = add_route(r1, post("/users", create_user_handler))
 
     let get_request: Request = make_request(GET, "/users")
     let get_response: Response = handle_request(router, get_request)
@@ -401,8 +365,7 @@ let test_route_different_methods_same_path: fn() -> void = fn() -> void {
 // ============================================================================
 
 let test_trailing_slash_no_match: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> add_route(get("/users", users_handler))
+    let router: Router = add_route(new_router(), get("/users", users_handler))
 
     // Trailing slash should not match route without it
     let request: Request = make_request(GET, "/users/")
@@ -416,8 +379,7 @@ let test_trailing_slash_no_match: fn() -> void = fn() -> void {
 }
 
 let test_double_slash_normalized: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> add_route(get("/users/:id", user_handler))
+    let router: Router = add_route(new_router(), get("/users/:id", user_handler))
 
     // Double slashes should be normalized
     let request: Request = make_request(GET, "/users//123")
@@ -428,8 +390,7 @@ let test_double_slash_normalized: fn() -> void = fn() -> void {
 }
 
 let test_empty_path_matches_root: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> add_route(get("/", home_handler))
+    let router: Router = add_route(new_router(), get("/", home_handler))
 
     // Empty path should match root
     let request: Request = make_request(GET, "")

@@ -4,21 +4,9 @@
 
 module http.tests.test_types
 
-use http.types.Status
-use http.types.Header
-use http.types.Headers
-use http.status.status_code
-use http.status.status_from_code
-use http.status.is_success
-use http.status.is_redirect
-use http.status.is_client_error
-use http.status.is_server_error
-use http.headers.get_header
-use http.headers.set_header
-use http.headers.remove_header
-use http.headers.content_type
-use http.headers.authorization
-use http.headers.accept
+import http.types.{Status, Header, Headers}
+import http.status.{status_code, status_from_code, is_success, is_redirect, is_client_error, is_server_error}
+import http.headers.{get_header, set_header, remove_header, content_type, authorization, accept}
 
 // Status code conversion tests
 

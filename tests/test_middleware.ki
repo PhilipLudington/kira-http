@@ -4,27 +4,12 @@
 
 module tests.test_middleware
 
-use http.types.Method
-use http.types.Status
-use http.request.Request
-use http.response.Response
-use http.response.ok
-use http.headers.get_header
-use http.middleware.Middleware
-use http.middleware.logging
-use http.middleware.cors
-use http.middleware.timeout
-use http.middleware.compose
-use http.middleware.compose_all
-use http.middleware.apply_middleware
-use http.middleware.apply_all_middleware
-use http.router.Handler
-use http.router.Router
-use http.router.new_router
-use http.router.add_route
-use http.router.use_middleware
-use http.router.get
-use http.router.handle_request
+import http.types.{Method, Status}
+import http.request.{Request}
+import http.response.{Response, ok}
+import http.headers.{get_header}
+import http.middleware.{Middleware, logging, cors, timeout, compose, compose_all, apply_middleware, apply_all_middleware}
+import http.router.{Handler, Router, new_router, add_route, use_middleware, get, handle_request}
 
 // Test handlers
 let echo_handler: Handler = fn(req: Request) -> Response {
@@ -372,9 +357,8 @@ let test_timeout_different_values: fn() -> void = fn() -> void {
 // ============================================================================
 
 let test_router_use_middleware: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> use_middleware(logging())
-        |> add_route(get("/", hello_handler))
+    let r1: Router = use_middleware(new_router(), logging())
+    let router: Router = add_route(r1, get("/", hello_handler))
 
     let request: Request = make_request(GET, "/")
     let response: Response = handle_request(router, request)
@@ -392,10 +376,9 @@ let test_router_use_middleware: fn() -> void = fn() -> void {
 }
 
 let test_router_multiple_middleware: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> use_middleware(logging())
-        |> use_middleware(cors(Cons("*", Nil)))
-        |> add_route(get("/api", hello_handler))
+    let r1: Router = use_middleware(new_router(), logging())
+    let r2: Router = use_middleware(r1, cors(Cons("*", Nil)))
+    let router: Router = add_route(r2, get("/api", hello_handler))
 
     let request: Request = make_request(GET, "/api")
     let response: Response = handle_request(router, request)
@@ -413,8 +396,7 @@ let test_router_multiple_middleware: fn() -> void = fn() -> void {
 }
 
 let test_router_middleware_applies_to_not_found: fn() -> void = fn() -> void {
-    let router: Router = new_router()
-        |> use_middleware(cors(Cons("*", Nil)))
+    let router: Router = use_middleware(new_router(), cors(Cons("*", Nil)))
 
     let request: Request = make_request(GET, "/nonexistent")
     let response: Response = handle_request(router, request)
@@ -462,10 +444,9 @@ let test_router_middleware_order: fn() -> void = fn() -> void {
         }
     }
 
-    let router: Router = new_router()
-        |> use_middleware(first_mw)
-        |> use_middleware(second_mw)
-        |> add_route(get("/", hello_handler))
+    let r1: Router = use_middleware(new_router(), first_mw)
+    let r2: Router = use_middleware(r1, second_mw)
+    let router: Router = add_route(r2, get("/", hello_handler))
 
     let request: Request = make_request(GET, "/")
     let response: Response = handle_request(router, request)

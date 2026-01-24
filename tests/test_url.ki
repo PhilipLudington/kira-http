@@ -5,16 +5,8 @@
 
 module http.tests.test_url
 
-use http.types.HttpError
-use http.types.QueryParam
-use http.url.Url
-use http.url.parse_url
-use http.url.build_url
-use http.url.parse_query_string
-use http.url.get_query_param
-use http.url.get_query_params
-use http.url.extract_path_param
-use http.url.path_matches
+import http.types.{HttpError, QueryParam}
+import http.url.{Url, parse_url, build_url, parse_query_string, get_query_param, get_query_params, extract_path_param, path_matches}
 
 // URL parsing tests - various schemes
 
