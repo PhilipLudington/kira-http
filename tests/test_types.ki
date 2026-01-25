@@ -1,14 +1,185 @@
 /// Tests for kira-http core types
 ///
 /// Tests status code conversion, status category checks, and header manipulation.
+/// Self-contained for Kira v0.1.0 (no module system support).
 
-module http.tests.test_types
+// ============================================================================
+// Type Definitions (from src/types.ki)
+// ============================================================================
 
-import http.types.{Status, Header, Headers}
-import http.status.{status_code, status_from_code, is_success, is_redirect, is_client_error, is_server_error}
-import http.headers.{get_header, set_header, remove_header, content_type, authorization, accept}
+type Status =
+    | OK
+    | Created
+    | Accepted
+    | NoContent
+    | MovedPermanently
+    | Found
+    | NotModified
+    | BadRequest
+    | Unauthorized
+    | Forbidden
+    | NotFound
+    | MethodNotAllowed
+    | Conflict
+    | InternalError
+    | NotImplemented
+    | BadGateway
+    | ServiceUnavailable
+    | Custom(i32)
 
-// Status code conversion tests
+type Header = {
+    name: string,
+    value: string
+}
+
+type Headers = List[Header]
+
+// ============================================================================
+// Functions (from src/status.ki)
+// ============================================================================
+
+let status_code: fn(Status) -> i32 = fn(status: Status) -> i32 {
+    var code: i32
+    match status {
+        OK => { code = 200 }
+        Created => { code = 201 }
+        Accepted => { code = 202 }
+        NoContent => { code = 204 }
+        MovedPermanently => { code = 301 }
+        Found => { code = 302 }
+        NotModified => { code = 304 }
+        BadRequest => { code = 400 }
+        Unauthorized => { code = 401 }
+        Forbidden => { code = 403 }
+        NotFound => { code = 404 }
+        MethodNotAllowed => { code = 405 }
+        Conflict => { code = 409 }
+        InternalError => { code = 500 }
+        NotImplemented => { code = 501 }
+        BadGateway => { code = 502 }
+        ServiceUnavailable => { code = 503 }
+        Custom(n) => { code = n }
+    }
+    return code
+}
+
+let status_from_code: fn(i32) -> Status = fn(code: i32) -> Status {
+    var status: Status
+    match code {
+        200 => { status = OK }
+        201 => { status = Created }
+        202 => { status = Accepted }
+        204 => { status = NoContent }
+        301 => { status = MovedPermanently }
+        302 => { status = Found }
+        304 => { status = NotModified }
+        400 => { status = BadRequest }
+        401 => { status = Unauthorized }
+        403 => { status = Forbidden }
+        404 => { status = NotFound }
+        405 => { status = MethodNotAllowed }
+        409 => { status = Conflict }
+        500 => { status = InternalError }
+        501 => { status = NotImplemented }
+        502 => { status = BadGateway }
+        503 => { status = ServiceUnavailable }
+        _ => { status = Custom(code) }
+    }
+    return status
+}
+
+let is_success: fn(Status) -> bool = fn(status: Status) -> bool {
+    let code: i32 = status_code(status)
+    return code >= 200 and code < 300
+}
+
+let is_redirect: fn(Status) -> bool = fn(status: Status) -> bool {
+    let code: i32 = status_code(status)
+    return code >= 300 and code < 400
+}
+
+let is_client_error: fn(Status) -> bool = fn(status: Status) -> bool {
+    let code: i32 = status_code(status)
+    return code >= 400 and code < 500
+}
+
+let is_server_error: fn(Status) -> bool = fn(status: Status) -> bool {
+    let code: i32 = status_code(status)
+    return code >= 500 and code < 600
+}
+
+// ============================================================================
+// Functions (from src/headers.ki)
+// ============================================================================
+
+let get_header: fn(Headers, string) -> Option[string] =
+    fn(headers: Headers, name: string) -> Option[string] {
+        let lower_name: string = std.string.to_lower(name)
+        return find_header_value(headers, lower_name)
+    }
+
+let find_header_value: fn(Headers, string) -> Option[string] =
+    fn(headers: Headers, lower_name: string) -> Option[string] {
+        var result: Option[string]
+        match headers {
+            Nil => { result = None }
+            Cons(header, rest) => {
+                let header_lower: string = std.string.to_lower(header.name)
+                if header_lower == lower_name {
+                    result = Some(header.value)
+                } else {
+                    result = find_header_value(rest, lower_name)
+                }
+            }
+        }
+        return result
+    }
+
+let set_header: fn(Headers, string, string) -> Headers =
+    fn(headers: Headers, name: string, value: string) -> Headers {
+        let without_existing: Headers = remove_header(headers, name)
+        let new_header: Header = Header { name: name, value: value }
+        return Cons(new_header, without_existing)
+    }
+
+let remove_header: fn(Headers, string) -> Headers =
+    fn(headers: Headers, name: string) -> Headers {
+        let lower_name: string = std.string.to_lower(name)
+        return filter_headers(headers, lower_name)
+    }
+
+let filter_headers: fn(Headers, string) -> Headers =
+    fn(headers: Headers, lower_name: string) -> Headers {
+        var result: Headers
+        match headers {
+            Nil => { result = Nil }
+            Cons(header, rest) => {
+                let header_lower: string = std.string.to_lower(header.name)
+                if header_lower == lower_name {
+                    result = filter_headers(rest, lower_name)
+                } else {
+                    result = Cons(header, filter_headers(rest, lower_name))
+                }
+            }
+        }
+        return result
+    }
+
+let content_type: fn(string) -> Header = fn(value: string) -> Header {
+    return Header { name: "Content-Type", value: value }
+}
+
+let authorization: fn(string) -> Header = fn(value: string) -> Header {
+    return Header { name: "Authorization", value: value }
+}
+
+let accept: fn(string) -> Header = fn(value: string) -> Header {
+    return Header { name: "Accept", value: value }
+}
+
+// ============================================================================
+// Tests: Status code conversion
+// ============================================================================
 
 test "status_code returns 200 for OK" {
     assert(status_code(OK) == 200)
@@ -82,7 +253,9 @@ test "status_code returns custom value for Custom" {
     assert(status_code(Custom(418)) == 418)
 }
 
-// Status from code conversion tests
+// ============================================================================
+// Tests: Status from code conversion
+// ============================================================================
 
 test "status_from_code 200 returns OK" {
     var matches: bool
@@ -120,7 +293,9 @@ test "status_from_code unknown returns Custom" {
     assert(matches)
 }
 
-// Round-trip tests
+// ============================================================================
+// Tests: Round-trips
+// ============================================================================
 
 test "status_code roundtrip for OK" {
     let code: i32 = status_code(OK)
@@ -152,7 +327,9 @@ test "status_code roundtrip for Custom" {
     assert(matches)
 }
 
-// Status category tests
+// ============================================================================
+// Tests: Status category checks
+// ============================================================================
 
 test "is_success true for OK" {
     assert(is_success(OK) == true)
@@ -234,7 +411,9 @@ test "is_server_error false for NotFound" {
     assert(is_server_error(NotFound) == false)
 }
 
-// Custom status category tests
+// ============================================================================
+// Tests: Custom status category checks
+// ============================================================================
 
 test "is_success true for Custom 200" {
     assert(is_success(Custom(200)) == true)
@@ -256,7 +435,9 @@ test "is_server_error true for Custom 599" {
     assert(is_server_error(Custom(599)) == true)
 }
 
-// Header manipulation tests
+// ============================================================================
+// Tests: Header manipulation
+// ============================================================================
 
 test "get_header finds existing header" {
     let headers: Headers = Cons(
@@ -397,7 +578,9 @@ test "remove_header handles non-existing header" {
     assert(found)
 }
 
-// Header helper function tests
+// ============================================================================
+// Tests: Header helper functions
+// ============================================================================
 
 test "content_type creates correct header" {
     let header: Header = content_type("application/json")

@@ -59,14 +59,20 @@ Available Claude Code skills for this project:
 
 ## Running Tests
 
-Tests use Kira's built-in test system. Tests are defined with the `test "description" { ... }` syntax:
+Always use the GitStat wrapper script to run tests:
 
 ```bash
-kira test tests/test_types.ki      # Run type tests
-kira test tests/test_url.ki        # Run URL tests
-kira test tests/test_router.ki     # Run router tests
-kira test tests/test_middleware.ki # Run middleware tests
-kira test tests/                   # Run all tests
+./run-tests.sh
+```
+
+Do NOT run `kira test` directly - use the wrapper script to preserve GitStat integration and result tracking.
+
+The wrapper runs all test files in `tests/` and writes results to `.test-results.json`.
+
+To run a single test file for debugging:
+
+```bash
+kira test tests/test_types.ki
 ```
 
 **Note:** Requires Kira v0.2.0+ with module system support (`import` statements).
