@@ -1,15 +1,263 @@
 /// Tests for kira-http response module
 ///
 /// Tests response helper functions and correct status codes and headers.
+/// Self-contained for Kira v0.1.0 (no module system support).
 
-module http.tests.test_response
+// ============================================================================
+// Type Definitions
+// ============================================================================
 
-import http.types.{Status, Header, Headers}
-import http.response.{Response, ok, created, no_content, bad_request, unauthorized, forbidden, not_found, method_not_allowed, conflict, internal_error, service_unavailable, json_response, json_ok, json_created, redirect, permanent_redirect, with_header, with_body, with_status}
-import http.headers.{get_header}
-import http.status.{status_code}
+type Status =
+    | OK
+    | Created
+    | Accepted
+    | NoContent
+    | MovedPermanently
+    | Found
+    | NotModified
+    | BadRequest
+    | Unauthorized
+    | Forbidden
+    | NotFound
+    | MethodNotAllowed
+    | Conflict
+    | InternalError
+    | NotImplemented
+    | BadGateway
+    | ServiceUnavailable
+    | Custom(i32)
 
-// ok tests
+type Header = {
+    name: string,
+    value: string
+}
+
+type Headers = List[Header]
+
+type Response = {
+    status: Status,
+    headers: Headers,
+    body: string
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+let make_json_content_type: fn() -> Header = fn() -> Header {
+    return Header { name: "Content-Type", value: "application/json" }
+}
+
+let make_text_content_type: fn() -> Header = fn() -> Header {
+    return Header { name: "Content-Type", value: "text/plain" }
+}
+
+let get_header: fn(Headers, string) -> Option[string] =
+    fn(headers: Headers, name: string) -> Option[string] {
+        let lower_name: string = std.string.to_lower(name)
+        return find_header_value(headers, lower_name)
+    }
+
+let find_header_value: fn(Headers, string) -> Option[string] =
+    fn(headers: Headers, lower_name: string) -> Option[string] {
+        var result: Option[string]
+        match headers {
+            Nil => { result = None }
+            Cons(header, rest) => {
+                let header_lower: string = std.string.to_lower(header.name)
+                if header_lower == lower_name {
+                    result = Some(header.value)
+                } else {
+                    result = find_header_value(rest, lower_name)
+                }
+            }
+        }
+        return result
+    }
+
+let status_code: fn(Status) -> i32 = fn(status: Status) -> i32 {
+    var code: i32
+    match status {
+        OK => { code = 200 }
+        Created => { code = 201 }
+        Accepted => { code = 202 }
+        NoContent => { code = 204 }
+        MovedPermanently => { code = 301 }
+        Found => { code = 302 }
+        NotModified => { code = 304 }
+        BadRequest => { code = 400 }
+        Unauthorized => { code = 401 }
+        Forbidden => { code = 403 }
+        NotFound => { code = 404 }
+        MethodNotAllowed => { code = 405 }
+        Conflict => { code = 409 }
+        InternalError => { code = 500 }
+        NotImplemented => { code = 501 }
+        BadGateway => { code = 502 }
+        ServiceUnavailable => { code = 503 }
+        Custom(n) => { code = n }
+    }
+    return code
+}
+
+// ============================================================================
+// Response Functions
+// ============================================================================
+
+let ok: fn(string) -> Response = fn(body: string) -> Response {
+    return Response {
+        status: OK,
+        headers: Cons(make_text_content_type(), Nil),
+        body: body
+    }
+}
+
+let created: fn(string) -> Response = fn(body: string) -> Response {
+    return Response {
+        status: Created,
+        headers: Cons(make_text_content_type(), Nil),
+        body: body
+    }
+}
+
+let no_content: fn() -> Response = fn() -> Response {
+    return Response {
+        status: NoContent,
+        headers: Nil,
+        body: ""
+    }
+}
+
+let bad_request: fn(string) -> Response = fn(message: string) -> Response {
+    return Response {
+        status: BadRequest,
+        headers: Cons(make_text_content_type(), Nil),
+        body: message
+    }
+}
+
+let unauthorized: fn(string) -> Response = fn(message: string) -> Response {
+    return Response {
+        status: Unauthorized,
+        headers: Cons(make_text_content_type(), Nil),
+        body: message
+    }
+}
+
+let forbidden: fn(string) -> Response = fn(message: string) -> Response {
+    return Response {
+        status: Forbidden,
+        headers: Cons(make_text_content_type(), Nil),
+        body: message
+    }
+}
+
+let not_found: fn() -> Response = fn() -> Response {
+    return Response {
+        status: NotFound,
+        headers: Cons(make_text_content_type(), Nil),
+        body: "Not Found"
+    }
+}
+
+let method_not_allowed: fn() -> Response = fn() -> Response {
+    return Response {
+        status: MethodNotAllowed,
+        headers: Cons(make_text_content_type(), Nil),
+        body: "Method Not Allowed"
+    }
+}
+
+let conflict: fn(string) -> Response = fn(message: string) -> Response {
+    return Response {
+        status: Conflict,
+        headers: Cons(make_text_content_type(), Nil),
+        body: message
+    }
+}
+
+let internal_error: fn(string) -> Response = fn(message: string) -> Response {
+    return Response {
+        status: InternalError,
+        headers: Cons(make_text_content_type(), Nil),
+        body: message
+    }
+}
+
+let service_unavailable: fn(string) -> Response = fn(message: string) -> Response {
+    return Response {
+        status: ServiceUnavailable,
+        headers: Cons(make_text_content_type(), Nil),
+        body: message
+    }
+}
+
+let json_response: fn(Status, string) -> Response =
+    fn(status: Status, json_body: string) -> Response {
+        return Response {
+            status: status,
+            headers: Cons(make_json_content_type(), Nil),
+            body: json_body
+        }
+    }
+
+let json_ok: fn(string) -> Response = fn(json_body: string) -> Response {
+    return json_response(OK, json_body)
+}
+
+let json_created: fn(string) -> Response = fn(json_body: string) -> Response {
+    return json_response(Created, json_body)
+}
+
+let redirect: fn(string) -> Response = fn(location: string) -> Response {
+    let location_header: Header = Header { name: "Location", value: location }
+    return Response {
+        status: Found,
+        headers: Cons(location_header, Nil),
+        body: ""
+    }
+}
+
+let permanent_redirect: fn(string) -> Response = fn(location: string) -> Response {
+    let location_header: Header = Header { name: "Location", value: location }
+    return Response {
+        status: MovedPermanently,
+        headers: Cons(location_header, Nil),
+        body: ""
+    }
+}
+
+let with_header: fn(Response, string, string) -> Response =
+    fn(response: Response, name: string, value: string) -> Response {
+        let new_header: Header = Header { name: name, value: value }
+        return Response {
+            status: response.status,
+            headers: Cons(new_header, response.headers),
+            body: response.body
+        }
+    }
+
+let with_body: fn(Response, string) -> Response =
+    fn(response: Response, body: string) -> Response {
+        return Response {
+            status: response.status,
+            headers: response.headers,
+            body: body
+        }
+    }
+
+let with_status: fn(Response, Status) -> Response =
+    fn(response: Response, status: Status) -> Response {
+        return Response {
+            status: status,
+            headers: response.headers,
+            body: response.body
+        }
+    }
+
+// ============================================================================
+// Tests: ok
+// ============================================================================
 
 test "ok sets OK status" {
     let response: Response = ok("Hello")
@@ -36,7 +284,9 @@ test "ok sets content type" {
     assert(has_content_type)
 }
 
-// created tests
+// ============================================================================
+// Tests: created
+// ============================================================================
 
 test "created sets Created status" {
     let response: Response = created("{\"id\": 1}")
@@ -63,7 +313,9 @@ test "created sets content type" {
     assert(has_content_type)
 }
 
-// no_content tests
+// ============================================================================
+// Tests: no_content
+// ============================================================================
 
 test "no_content sets NoContent status" {
     let response: Response = no_content()
@@ -90,7 +342,9 @@ test "no_content has no headers" {
     assert(is_empty)
 }
 
-// bad_request tests
+// ============================================================================
+// Tests: bad_request
+// ============================================================================
 
 test "bad_request sets BadRequest status" {
     let response: Response = bad_request("Invalid input")
@@ -112,7 +366,9 @@ test "bad_request returns 400 status code" {
     assert(status_code(response.status) == 400)
 }
 
-// unauthorized tests
+// ============================================================================
+// Tests: unauthorized
+// ============================================================================
 
 test "unauthorized sets Unauthorized status" {
     let response: Response = unauthorized("Invalid token")
@@ -134,7 +390,9 @@ test "unauthorized returns 401 status code" {
     assert(status_code(response.status) == 401)
 }
 
-// forbidden tests
+// ============================================================================
+// Tests: forbidden
+// ============================================================================
 
 test "forbidden sets Forbidden status" {
     let response: Response = forbidden("Access denied")
@@ -156,7 +414,9 @@ test "forbidden returns 403 status code" {
     assert(status_code(response.status) == 403)
 }
 
-// not_found tests
+// ============================================================================
+// Tests: not_found
+// ============================================================================
 
 test "not_found sets NotFound status" {
     let response: Response = not_found()
@@ -178,7 +438,9 @@ test "not_found returns 404 status code" {
     assert(status_code(response.status) == 404)
 }
 
-// method_not_allowed tests
+// ============================================================================
+// Tests: method_not_allowed
+// ============================================================================
 
 test "method_not_allowed sets MethodNotAllowed status" {
     let response: Response = method_not_allowed()
@@ -200,7 +462,9 @@ test "method_not_allowed returns 405 status code" {
     assert(status_code(response.status) == 405)
 }
 
-// conflict tests
+// ============================================================================
+// Tests: conflict
+// ============================================================================
 
 test "conflict sets Conflict status" {
     let response: Response = conflict("Resource already exists")
@@ -222,7 +486,9 @@ test "conflict returns 409 status code" {
     assert(status_code(response.status) == 409)
 }
 
-// internal_error tests
+// ============================================================================
+// Tests: internal_error
+// ============================================================================
 
 test "internal_error sets InternalError status" {
     let response: Response = internal_error("Database error")
@@ -244,7 +510,9 @@ test "internal_error returns 500 status code" {
     assert(status_code(response.status) == 500)
 }
 
-// service_unavailable tests
+// ============================================================================
+// Tests: service_unavailable
+// ============================================================================
 
 test "service_unavailable sets ServiceUnavailable status" {
     let response: Response = service_unavailable("Maintenance mode")
@@ -266,7 +534,9 @@ test "service_unavailable returns 503 status code" {
     assert(status_code(response.status) == 503)
 }
 
-// json_response tests
+// ============================================================================
+// Tests: json_response
+// ============================================================================
 
 test "json_response sets status" {
     let response: Response = json_response(OK, "{}")
@@ -303,7 +573,9 @@ test "json_response works with error status" {
     assert(matches)
 }
 
-// json_ok tests
+// ============================================================================
+// Tests: json_ok
+// ============================================================================
 
 test "json_ok sets OK status" {
     let response: Response = json_ok("{}")
@@ -325,7 +597,9 @@ test "json_ok sets content type" {
     assert(has_json_type)
 }
 
-// json_created tests
+// ============================================================================
+// Tests: json_created
+// ============================================================================
 
 test "json_created sets Created status" {
     let response: Response = json_created("{\"id\": 1}")
@@ -347,7 +621,9 @@ test "json_created sets content type" {
     assert(has_json_type)
 }
 
-// redirect tests
+// ============================================================================
+// Tests: redirect
+// ============================================================================
 
 test "redirect sets Found status" {
     let response: Response = redirect("https://example.com")
@@ -379,7 +655,9 @@ test "redirect returns 302 status code" {
     assert(status_code(response.status) == 302)
 }
 
-// permanent_redirect tests
+// ============================================================================
+// Tests: permanent_redirect
+// ============================================================================
 
 test "permanent_redirect sets MovedPermanently status" {
     let response: Response = permanent_redirect("https://example.com")
@@ -406,7 +684,9 @@ test "permanent_redirect returns 301 status code" {
     assert(status_code(response.status) == 301)
 }
 
-// with_header tests
+// ============================================================================
+// Tests: with_header
+// ============================================================================
 
 test "with_header adds header" {
     let response: Response = with_header(ok("body"), "X-Custom", "value")
@@ -430,11 +710,12 @@ test "with_header preserves existing headers" {
     assert(has_content_type)
 }
 
-// with_body tests
+// ============================================================================
+// Tests: with_body
+// ============================================================================
 
 test "with_body changes body" {
     let response: Response = with_body(ok("original"), "modified")
-
     assert(response.body == "modified")
 }
 
@@ -449,7 +730,9 @@ test "with_body preserves status" {
     assert(matches)
 }
 
-// with_status tests
+// ============================================================================
+// Tests: with_status
+// ============================================================================
 
 test "with_status changes status" {
     let response: Response = with_status(ok("body"), Created)
@@ -464,11 +747,12 @@ test "with_status changes status" {
 
 test "with_status preserves body" {
     let response: Response = with_status(ok("original body"), Created)
-
     assert(response.body == "original body")
 }
 
-// chaining tests
+// ============================================================================
+// Tests: chaining
+// ============================================================================
 
 test "response chaining works" {
     let r1: Response = ok("initial")

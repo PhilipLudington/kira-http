@@ -2,13 +2,371 @@
 ///
 /// Tests URL parsing, URL building round-trips, query parameter extraction,
 /// path parameter extraction, and invalid URL handling.
+/// Self-contained for Kira v0.1.0 (no module system support).
 
-module http.tests.test_url
+// ============================================================================
+// Type Definitions
+// ============================================================================
 
-import http.types.{HttpError, QueryParam}
-import http.url.{Url, parse_url, build_url, parse_query_string, get_query_param, get_query_params, extract_path_param, path_matches}
+type HttpError =
+    | ConnectionFailed(string)
+    | Timeout
+    | InvalidUrl(string)
+    | InvalidResponse(string)
+    | TlsError(string)
 
-// URL parsing tests - various schemes
+type QueryParam = {
+    key: string,
+    value: string
+}
+
+type Url = {
+    scheme: string,
+    host: string,
+    port: Option[i32],
+    path: string,
+    query: Option[string],
+    fragment: Option[string]
+}
+
+// ============================================================================
+// URL Functions
+// ============================================================================
+
+let parse_url: fn(string) -> Result[Url, HttpError] =
+    fn(url: string) -> Result[Url, HttpError] {
+        if std.string.length(url) == 0 {
+            return Err(InvalidUrl("empty URL"))
+        }
+
+        let scheme_end: Option[i32] = std.string.index_of(url, "://")
+        var scheme: string
+        var rest: string
+
+        match scheme_end {
+            Some(idx) => {
+                scheme = std.string.substring(url, 0, idx)
+                rest = std.string.substring(url, idx + 3, std.string.length(url))
+            }
+            None => {
+                return Err(InvalidUrl("missing scheme"))
+            }
+        }
+
+        if std.string.length(scheme) == 0 {
+            return Err(InvalidUrl("empty scheme"))
+        }
+
+        var fragment: Option[string]
+        let fragment_idx: Option[i32] = std.string.index_of(rest, "#")
+        match fragment_idx {
+            Some(idx) => {
+                fragment = Some(std.string.substring(rest, idx + 1, std.string.length(rest)))
+                rest = std.string.substring(rest, 0, idx)
+            }
+            None => {
+                fragment = None
+            }
+        }
+
+        var query: Option[string]
+        let query_idx: Option[i32] = std.string.index_of(rest, "?")
+        match query_idx {
+            Some(idx) => {
+                query = Some(std.string.substring(rest, idx + 1, std.string.length(rest)))
+                rest = std.string.substring(rest, 0, idx)
+            }
+            None => {
+                query = None
+            }
+        }
+
+        var path: string
+        let path_idx: Option[i32] = std.string.index_of(rest, "/")
+        match path_idx {
+            Some(idx) => {
+                path = std.string.substring(rest, idx, std.string.length(rest))
+                rest = std.string.substring(rest, 0, idx)
+            }
+            None => {
+                path = "/"
+            }
+        }
+
+        if std.string.length(rest) == 0 {
+            return Err(InvalidUrl("missing host"))
+        }
+
+        var host: string
+        var port: Option[i32]
+
+        let port_idx: Option[i32] = std.string.index_of(rest, ":")
+        match port_idx {
+            Some(idx) => {
+                host = std.string.substring(rest, 0, idx)
+                let port_str: string = std.string.substring(rest, idx + 1, std.string.length(rest))
+                let port_result: Option[i32] = std.string.parse_int(port_str)
+                match port_result {
+                    Some(p) => {
+                        if p < 0 or p > 65535 {
+                            return Err(InvalidUrl("port out of range"))
+                        }
+                        port = Some(p)
+                    }
+                    None => {
+                        return Err(InvalidUrl("invalid port"))
+                    }
+                }
+            }
+            None => {
+                host = rest
+                port = None
+            }
+        }
+
+        if std.string.length(host) == 0 {
+            return Err(InvalidUrl("empty host"))
+        }
+
+        return Ok(Url {
+            scheme: scheme,
+            host: host,
+            port: port,
+            path: path,
+            query: query,
+            fragment: fragment
+        })
+    }
+
+let build_url: fn(Url) -> string = fn(url: Url) -> string {
+    var result: string = url.scheme + "://" + url.host
+
+    match url.port {
+        Some(p) => {
+            result = result + ":" + std.string.from_int(p)
+        }
+        None => {}
+    }
+
+    result = result + url.path
+
+    match url.query {
+        Some(q) => {
+            result = result + "?" + q
+        }
+        None => {}
+    }
+
+    match url.fragment {
+        Some(f) => {
+            result = result + "#" + f
+        }
+        None => {}
+    }
+
+    return result
+}
+
+let parse_query_string: fn(string) -> List[QueryParam] =
+    fn(query: string) -> List[QueryParam] {
+        if std.string.length(query) == 0 {
+            return Nil
+        }
+        return parse_query_pairs(query)
+    }
+
+let parse_query_pairs: fn(string) -> List[QueryParam] =
+    fn(query: string) -> List[QueryParam] {
+        let amp_idx: Option[i32] = std.string.index_of(query, "&")
+
+        var current_pair: string
+        var remaining: Option[string]
+
+        match amp_idx {
+            Some(idx) => {
+                current_pair = std.string.substring(query, 0, idx)
+                remaining = Some(std.string.substring(query, idx + 1, std.string.length(query)))
+            }
+            None => {
+                current_pair = query
+                remaining = None
+            }
+        }
+
+        let eq_idx: Option[i32] = std.string.index_of(current_pair, "=")
+        var param: QueryParam
+
+        match eq_idx {
+            Some(idx) => {
+                let raw_key: string = std.string.substring(current_pair, 0, idx)
+                let raw_value: string = std.string.substring(current_pair, idx + 1, std.string.length(current_pair))
+                param = QueryParam {
+                    key: raw_key,
+                    value: raw_value
+                }
+            }
+            None => {
+                param = QueryParam {
+                    key: current_pair,
+                    value: ""
+                }
+            }
+        }
+
+        match remaining {
+            Some(rest) => {
+                if std.string.length(rest) > 0 {
+                    return Cons(param, parse_query_pairs(rest))
+                } else {
+                    return Cons(param, Nil)
+                }
+            }
+            None => {
+                return Cons(param, Nil)
+            }
+        }
+    }
+
+let get_query_param: fn(List[QueryParam], string) -> Option[string] =
+    fn(params: List[QueryParam], name: string) -> Option[string] {
+        var result: Option[string]
+        match params {
+            Nil => { result = None }
+            Cons(param, rest) => {
+                if param.key == name {
+                    result = Some(param.value)
+                } else {
+                    result = get_query_param(rest, name)
+                }
+            }
+        }
+        return result
+    }
+
+let get_query_params: fn(List[QueryParam], string) -> List[string] =
+    fn(params: List[QueryParam], name: string) -> List[string] {
+        var result: List[string]
+        match params {
+            Nil => { result = Nil }
+            Cons(param, rest) => {
+                let rest_values: List[string] = get_query_params(rest, name)
+                if param.key == name {
+                    result = Cons(param.value, rest_values)
+                } else {
+                    result = rest_values
+                }
+            }
+        }
+        return result
+    }
+
+let split_path: fn(string) -> List[string] =
+    fn(path: string) -> List[string] {
+        var working_path: string
+        if std.string.length(path) > 0 and std.string.char_at(path, 0) == '/' {
+            working_path = std.string.substring(path, 1, std.string.length(path))
+        } else {
+            working_path = path
+        }
+
+        if std.string.length(working_path) == 0 {
+            return Nil
+        }
+
+        return split_by_slash(working_path)
+    }
+
+let split_by_slash: fn(string) -> List[string] =
+    fn(s: string) -> List[string] {
+        let slash_idx: Option[i32] = std.string.index_of(s, "/")
+
+        match slash_idx {
+            Some(idx) => {
+                let segment: string = std.string.substring(s, 0, idx)
+                let rest: string = std.string.substring(s, idx + 1, std.string.length(s))
+                if std.string.length(rest) > 0 {
+                    return Cons(segment, split_by_slash(rest))
+                } else {
+                    return Cons(segment, Nil)
+                }
+            }
+            None => {
+                return Cons(s, Nil)
+            }
+        }
+    }
+
+let extract_path_param: fn(string, string, string) -> Option[string] =
+    fn(pattern: string, path: string, name: string) -> Option[string] {
+        let pattern_segments: List[string] = split_path(pattern)
+        let path_segments: List[string] = split_path(path)
+        return find_path_param(pattern_segments, path_segments, name)
+    }
+
+let find_path_param: fn(List[string], List[string], string) -> Option[string] =
+    fn(pattern_segments: List[string], path_segments: List[string], name: string) -> Option[string] {
+        var result: Option[string]
+        match pattern_segments {
+            Nil => { result = None }
+            Cons(pattern_seg, pattern_rest) => {
+                match path_segments {
+                    Nil => { result = None }
+                    Cons(path_seg, path_rest) => {
+                        if std.string.length(pattern_seg) > 0 and std.string.substring(pattern_seg, 0, 1) == ":" {
+                            let param_name: string = std.string.substring(pattern_seg, 1, std.string.length(pattern_seg))
+                            if param_name == name {
+                                result = Some(path_seg)
+                            } else {
+                                result = find_path_param(pattern_rest, path_rest, name)
+                            }
+                        } else {
+                            result = find_path_param(pattern_rest, path_rest, name)
+                        }
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+let path_matches: fn(string, string) -> bool =
+    fn(pattern: string, path: string) -> bool {
+        let pattern_segments: List[string] = split_path(pattern)
+        let path_segments: List[string] = split_path(path)
+        return segments_match(pattern_segments, path_segments)
+    }
+
+let segments_match: fn(List[string], List[string]) -> bool =
+    fn(pattern_segments: List[string], path_segments: List[string]) -> bool {
+        var result: bool
+        match pattern_segments {
+            Nil => {
+                match path_segments {
+                    Nil => { result = true }
+                    Cons(_, _) => { result = false }
+                }
+            }
+            Cons(pattern_seg, pattern_rest) => {
+                match path_segments {
+                    Nil => { result = false }
+                    Cons(path_seg, path_rest) => {
+                        if std.string.length(pattern_seg) > 0 and std.string.substring(pattern_seg, 0, 1) == ":" {
+                            result = segments_match(pattern_rest, path_rest)
+                        } else if pattern_seg == path_seg {
+                            result = segments_match(pattern_rest, path_rest)
+                        } else {
+                            result = false
+                        }
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+// ============================================================================
+// Tests: URL parsing - various schemes
+// ============================================================================
 
 test "parse_url parses https scheme" {
     let result: Result[Url, HttpError] = parse_url("https://example.com/path")
@@ -46,7 +404,9 @@ test "parse_url parses ftp scheme" {
     assert(is_valid)
 }
 
-// URL parsing tests - with port
+// ============================================================================
+// Tests: URL parsing - with port
+// ============================================================================
 
 test "parse_url extracts port 8080" {
     let result: Result[Url, HttpError] = parse_url("https://example.com:8080/api")
@@ -93,7 +453,9 @@ test "parse_url has None port when not specified" {
     assert(is_valid)
 }
 
-// URL parsing tests - with path
+// ============================================================================
+// Tests: URL parsing - with path
+// ============================================================================
 
 test "parse_url extracts simple path" {
     let result: Result[Url, HttpError] = parse_url("https://example.com/users")
@@ -135,7 +497,9 @@ test "parse_url handles root path" {
     assert(is_valid)
 }
 
-// URL parsing tests - with query
+// ============================================================================
+// Tests: URL parsing - with query
+// ============================================================================
 
 test "parse_url extracts query string" {
     let result: Result[Url, HttpError] = parse_url("https://example.com/search?q=kira")
@@ -182,7 +546,9 @@ test "parse_url has None query when not specified" {
     assert(is_valid)
 }
 
-// URL parsing tests - with fragment
+// ============================================================================
+// Tests: URL parsing - with fragment
+// ============================================================================
 
 test "parse_url extracts fragment" {
     let result: Result[Url, HttpError] = parse_url("https://example.com/page#section")
@@ -214,7 +580,9 @@ test "parse_url has None fragment when not specified" {
     assert(is_valid)
 }
 
-// URL parsing tests - complete URL
+// ============================================================================
+// Tests: URL parsing - complete URL
+// ============================================================================
 
 test "parse_url parses complete URL" {
     let result: Result[Url, HttpError] = parse_url("https://api.example.com:8080/v1/users?id=123#details")
@@ -248,7 +616,9 @@ test "parse_url parses complete URL" {
     assert(is_valid)
 }
 
-// URL building tests - round-trips
+// ============================================================================
+// Tests: URL building - round-trips
+// ============================================================================
 
 test "build_url creates simple URL" {
     let url: Url = Url {
@@ -343,7 +713,9 @@ test "parse and build roundtrip for minimal URL" {
     assert(is_valid)
 }
 
-// Query parameter extraction tests
+// ============================================================================
+// Tests: Query parameter extraction
+// ============================================================================
 
 test "parse_query_string parses single param" {
     let params: List[QueryParam] = parse_query_string("key=value")
@@ -462,7 +834,9 @@ test "get_query_params returns empty for missing param" {
     assert(is_empty)
 }
 
-// Path parameter extraction tests
+// ============================================================================
+// Tests: Path parameter extraction
+// ============================================================================
 
 test "extract_path_param extracts simple param" {
     let result: Option[string] = extract_path_param("/users/:id", "/users/123", "id")
@@ -514,7 +888,9 @@ test "extract_path_param returns None for path without params" {
     assert(is_not_found)
 }
 
-// Path matching tests
+// ============================================================================
+// Tests: Path matching
+// ============================================================================
 
 test "path_matches exact path" {
     assert(path_matches("/users", "/users") == true)
@@ -540,7 +916,9 @@ test "path_matches root path" {
     assert(path_matches("/", "/") == true)
 }
 
-// Invalid URL handling tests
+// ============================================================================
+// Tests: Invalid URL handling
+// ============================================================================
 
 test "parse_url fails for empty string" {
     let result: Result[Url, HttpError] = parse_url("")

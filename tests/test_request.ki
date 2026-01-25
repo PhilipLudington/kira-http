@@ -1,14 +1,109 @@
-/// Tests for kira-http request module
+/// Tests for kira-http request builder
 ///
-/// Tests request builder chaining, header accumulation, body setting, and build.
+/// Tests RequestBuilder construction, header management, body handling,
+/// and request building functionality.
+/// Self-contained for Kira v0.1.0 (no module system support).
 
-module http.tests.test_request
+// ============================================================================
+// Type Definitions
+// ============================================================================
 
-import http.types.{Method, Header, Headers, QueryParam}
-import http.request.{Request, RequestBuilder, new_request, with_header, with_headers, with_body, with_json, with_timeout, build, get_query_param, get_query_params, path_param, with_path_params}
-import http.headers.{get_header}
+type Method =
+    | GET
+    | POST
+    | PUT
+    | DELETE
+    | PATCH
+    | HEAD
+    | OPTIONS
 
-// Helper function for counting list length
+type Header = {
+    name: string,
+    value: string
+}
+
+type Headers = List[Header]
+
+type QueryParam = {
+    key: string,
+    value: string
+}
+
+type Request = {
+    method: Method,
+    url: string,
+    path: string,
+    headers: Headers,
+    body: Option[string],
+    query: List[QueryParam],
+    path_params: List[QueryParam]
+}
+
+type RequestBuilder = {
+    method: Method,
+    url: string,
+    headers: Headers,
+    body: Option[string],
+    timeout: Option[i32]
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+let set_header: fn(Headers, string, string) -> Headers =
+    fn(headers: Headers, name: string, value: string) -> Headers {
+        let without_existing: Headers = remove_header(headers, name)
+        let new_header: Header = Header { name: name, value: value }
+        return Cons(new_header, without_existing)
+    }
+
+let remove_header: fn(Headers, string) -> Headers =
+    fn(headers: Headers, name: string) -> Headers {
+        let lower_name: string = std.string.to_lower(name)
+        return filter_headers(headers, lower_name)
+    }
+
+let filter_headers: fn(Headers, string) -> Headers =
+    fn(headers: Headers, lower_name: string) -> Headers {
+        var result: Headers
+        match headers {
+            Nil => { result = Nil }
+            Cons(header, rest) => {
+                let header_lower: string = std.string.to_lower(header.name)
+                if header_lower == lower_name {
+                    result = filter_headers(rest, lower_name)
+                } else {
+                    result = Cons(header, filter_headers(rest, lower_name))
+                }
+            }
+        }
+        return result
+    }
+
+let get_header: fn(Headers, string) -> Option[string] =
+    fn(headers: Headers, name: string) -> Option[string] {
+        let lower_name: string = std.string.to_lower(name)
+        return find_header_value(headers, lower_name)
+    }
+
+let find_header_value: fn(Headers, string) -> Option[string] =
+    fn(headers: Headers, lower_name: string) -> Option[string] {
+        var result: Option[string]
+        match headers {
+            Nil => { result = None }
+            Cons(header, rest) => {
+                let header_lower: string = std.string.to_lower(header.name)
+                if header_lower == lower_name {
+                    result = Some(header.value)
+                } else {
+                    result = find_header_value(rest, lower_name)
+                }
+            }
+        }
+        return result
+    }
+
 let list_length: fn(List[string]) -> i32 = fn(list: List[string]) -> i32 {
     var count: i32
     match list {
@@ -18,7 +113,285 @@ let list_length: fn(List[string]) -> i32 = fn(list: List[string]) -> i32 {
     return count
 }
 
-// new_request tests
+// ============================================================================
+// RequestBuilder Functions
+// ============================================================================
+
+let new_request: fn(Method, string) -> RequestBuilder =
+    fn(method: Method, url: string) -> RequestBuilder {
+        return RequestBuilder {
+            method: method,
+            url: url,
+            headers: Nil,
+            body: None,
+            timeout: None
+        }
+    }
+
+let with_header: fn(RequestBuilder, string, string) -> RequestBuilder =
+    fn(builder: RequestBuilder, name: string, value: string) -> RequestBuilder {
+        return RequestBuilder {
+            method: builder.method,
+            url: builder.url,
+            headers: set_header(builder.headers, name, value),
+            body: builder.body,
+            timeout: builder.timeout
+        }
+    }
+
+let with_headers: fn(RequestBuilder, Headers) -> RequestBuilder =
+    fn(builder: RequestBuilder, headers: Headers) -> RequestBuilder {
+        let merged: Headers = merge_headers(builder.headers, headers)
+        return RequestBuilder {
+            method: builder.method,
+            url: builder.url,
+            headers: merged,
+            body: builder.body,
+            timeout: builder.timeout
+        }
+    }
+
+let merge_headers: fn(Headers, Headers) -> Headers =
+    fn(existing: Headers, new_headers: Headers) -> Headers {
+        var result: Headers
+        match new_headers {
+            Nil => { result = existing }
+            Cons(header, rest) => {
+                let updated: Headers = set_header(existing, header.name, header.value)
+                result = merge_headers(updated, rest)
+            }
+        }
+        return result
+    }
+
+let with_body: fn(RequestBuilder, string) -> RequestBuilder =
+    fn(builder: RequestBuilder, body: string) -> RequestBuilder {
+        return RequestBuilder {
+            method: builder.method,
+            url: builder.url,
+            headers: builder.headers,
+            body: Some(body),
+            timeout: builder.timeout
+        }
+    }
+
+let with_json: fn(RequestBuilder, string) -> RequestBuilder =
+    fn(builder: RequestBuilder, json_data: string) -> RequestBuilder {
+        let with_content_type: RequestBuilder = with_header(builder, "Content-Type", "application/json")
+        return with_body(with_content_type, json_data)
+    }
+
+let with_timeout: fn(RequestBuilder, i32) -> RequestBuilder =
+    fn(builder: RequestBuilder, ms: i32) -> RequestBuilder {
+        return RequestBuilder {
+            method: builder.method,
+            url: builder.url,
+            headers: builder.headers,
+            body: builder.body,
+            timeout: Some(ms)
+        }
+    }
+
+let build: fn(RequestBuilder) -> Request =
+    fn(builder: RequestBuilder) -> Request {
+        let path_and_query: PathAndQuery = extract_path_and_query(builder.url)
+        return Request {
+            method: builder.method,
+            url: builder.url,
+            path: path_and_query.path,
+            headers: builder.headers,
+            body: builder.body,
+            query: path_and_query.query,
+            path_params: Nil
+        }
+    }
+
+type PathAndQuery = {
+    path: string,
+    query: List[QueryParam]
+}
+
+let extract_path_and_query: fn(string) -> PathAndQuery =
+    fn(url: string) -> PathAndQuery {
+        let scheme_end: Option[i32] = std.string.index_of(url, "://")
+        var rest: string
+
+        match scheme_end {
+            Some(idx) => {
+                rest = std.string.substring(url, idx + 3, std.string.length(url))
+            }
+            None => {
+                rest = url
+            }
+        }
+
+        // First, find the path start (/) and query start (?) positions
+        let path_start: Option[i32] = std.string.index_of(rest, "/")
+        let query_in_rest: Option[i32] = std.string.index_of(rest, "?")
+        var path_portion: string
+
+        match path_start {
+            Some(idx) => {
+                path_portion = std.string.substring(rest, idx, std.string.length(rest))
+            }
+            None => {
+                // No path found - check if there's a query string directly on host
+                match query_in_rest {
+                    Some(q_idx) => {
+                        // Query exists without path, include it with root path
+                        path_portion = "/" + std.string.substring(rest, q_idx, std.string.length(rest))
+                    }
+                    None => {
+                        path_portion = "/"
+                    }
+                }
+            }
+        }
+
+        let query_start: Option[i32] = std.string.index_of(path_portion, "?")
+        var path: string
+        var query: List[QueryParam]
+
+        match query_start {
+            Some(idx) => {
+                path = std.string.substring(path_portion, 0, idx)
+                let query_string: string = std.string.substring(path_portion, idx + 1, std.string.length(path_portion))
+                query = parse_query_string(query_string)
+            }
+            None => {
+                path = path_portion
+                query = Nil
+            }
+        }
+
+        return PathAndQuery {
+            path: path,
+            query: query
+        }
+    }
+
+let parse_query_string: fn(string) -> List[QueryParam] =
+    fn(query: string) -> List[QueryParam] {
+        if std.string.length(query) == 0 {
+            return Nil
+        }
+        return parse_query_pairs(query)
+    }
+
+let parse_query_pairs: fn(string) -> List[QueryParam] =
+    fn(query: string) -> List[QueryParam] {
+        let amp_idx: Option[i32] = std.string.index_of(query, "&")
+
+        var current_pair: string
+        var remaining: Option[string]
+
+        match amp_idx {
+            Some(idx) => {
+                current_pair = std.string.substring(query, 0, idx)
+                remaining = Some(std.string.substring(query, idx + 1, std.string.length(query)))
+            }
+            None => {
+                current_pair = query
+                remaining = None
+            }
+        }
+
+        let eq_idx: Option[i32] = std.string.index_of(current_pair, "=")
+        var param: QueryParam
+
+        match eq_idx {
+            Some(idx) => {
+                param = QueryParam {
+                    key: std.string.substring(current_pair, 0, idx),
+                    value: std.string.substring(current_pair, idx + 1, std.string.length(current_pair))
+                }
+            }
+            None => {
+                param = QueryParam {
+                    key: current_pair,
+                    value: ""
+                }
+            }
+        }
+
+        match remaining {
+            Some(rest) => {
+                if std.string.length(rest) > 0 {
+                    return Cons(param, parse_query_pairs(rest))
+                } else {
+                    return Cons(param, Nil)
+                }
+            }
+            None => {
+                return Cons(param, Nil)
+            }
+        }
+    }
+
+let get_query_param: fn(Request, string) -> Option[string] =
+    fn(request: Request, name: string) -> Option[string] {
+        return find_param(request.query, name)
+    }
+
+let get_query_params: fn(Request, string) -> List[string] =
+    fn(request: Request, name: string) -> List[string] {
+        return find_all_params(request.query, name)
+    }
+
+let path_param: fn(Request, string) -> Option[string] =
+    fn(request: Request, name: string) -> Option[string] {
+        return find_param(request.path_params, name)
+    }
+
+let find_param: fn(List[QueryParam], string) -> Option[string] =
+    fn(params: List[QueryParam], name: string) -> Option[string] {
+        var result: Option[string]
+        match params {
+            Nil => { result = None }
+            Cons(param, rest) => {
+                if param.key == name {
+                    result = Some(param.value)
+                } else {
+                    result = find_param(rest, name)
+                }
+            }
+        }
+        return result
+    }
+
+let find_all_params: fn(List[QueryParam], string) -> List[string] =
+    fn(params: List[QueryParam], name: string) -> List[string] {
+        var result: List[string]
+        match params {
+            Nil => { result = Nil }
+            Cons(param, rest) => {
+                let rest_values: List[string] = find_all_params(rest, name)
+                if param.key == name {
+                    result = Cons(param.value, rest_values)
+                } else {
+                    result = rest_values
+                }
+            }
+        }
+        return result
+    }
+
+let with_path_params: fn(Request, List[QueryParam]) -> Request =
+    fn(request: Request, params: List[QueryParam]) -> Request {
+        return Request {
+            method: request.method,
+            url: request.url,
+            path: request.path,
+            headers: request.headers,
+            body: request.body,
+            query: request.query,
+            path_params: params
+        }
+    }
+
+// ============================================================================
+// Tests: new_request
+// ============================================================================
 
 test "new_request sets method to GET" {
     let builder: RequestBuilder = new_request(GET, "https://example.com")
@@ -75,7 +448,9 @@ test "new_request sets method to POST" {
     assert(matches)
 }
 
-// with_header tests
+// ============================================================================
+// Tests: with_header
+// ============================================================================
 
 test "with_header adds header" {
     let b1: RequestBuilder = new_request(GET, "https://example.com")
@@ -121,7 +496,9 @@ test "with_header replaces existing header" {
     assert(found)
 }
 
-// with_headers tests
+// ============================================================================
+// Tests: with_headers
+// ============================================================================
 
 test "with_headers adds multiple headers" {
     let headers: Headers = Cons(
@@ -162,7 +539,9 @@ test "with_headers preserves existing headers with empty list" {
     assert(found)
 }
 
-// with_body tests
+// ============================================================================
+// Tests: with_body
+// ============================================================================
 
 test "with_body sets body" {
     let b1: RequestBuilder = new_request(POST, "https://example.com")
@@ -189,7 +568,9 @@ test "with_body replaces existing body" {
     assert(has_body)
 }
 
-// with_json tests
+// ============================================================================
+// Tests: with_json
+// ============================================================================
 
 test "with_json sets body" {
     let b1: RequestBuilder = new_request(POST, "https://example.com")
@@ -215,7 +596,9 @@ test "with_json sets content type" {
     assert(has_content_type)
 }
 
-// with_timeout tests
+// ============================================================================
+// Tests: with_timeout
+// ============================================================================
 
 test "with_timeout sets timeout" {
     let b1: RequestBuilder = new_request(GET, "https://example.com")
@@ -242,7 +625,9 @@ test "with_timeout replaces existing timeout" {
     assert(has_timeout)
 }
 
-// build tests
+// ============================================================================
+// Tests: build
+// ============================================================================
 
 test "build sets method" {
     let b1: RequestBuilder = new_request(GET, "https://example.com")
@@ -329,7 +714,9 @@ test "build defaults path to /" {
     assert(request.path == "/")
 }
 
-// get_query_param tests
+// ============================================================================
+// Tests: get_query_param
+// ============================================================================
 
 test "get_query_param finds existing param" {
     let b1: RequestBuilder = new_request(GET, "https://example.com?name=Alice")
@@ -355,7 +742,9 @@ test "get_query_param returns None for missing param" {
     assert(not_found)
 }
 
-// get_query_params tests
+// ============================================================================
+// Tests: get_query_params
+// ============================================================================
 
 test "get_query_params finds multiple values" {
     let b1: RequestBuilder = new_request(GET, "https://example.com?tag=a&tag=b&tag=c")
@@ -379,7 +768,9 @@ test "get_query_params returns empty for missing param" {
     assert(is_empty)
 }
 
-// path_param tests
+// ============================================================================
+// Tests: path_param
+// ============================================================================
 
 test "path_param finds existing param" {
     let b1: RequestBuilder = new_request(GET, "https://example.com/users/123")
@@ -410,7 +801,9 @@ test "path_param returns None for missing param" {
     assert(not_found)
 }
 
-// Chaining test
+// ============================================================================
+// Tests: full builder chain
+// ============================================================================
 
 test "full builder chain works" {
     let b1: RequestBuilder = new_request(POST, "https://api.example.com/users?notify=true")
