@@ -35,9 +35,10 @@ type Response = {
     body: string
 }
 
-type Handler = fn(Request) -> Response
-
-type Middleware = fn(Handler) -> Handler
+// Note: Handler and Middleware are NOT defined as type aliases because
+// Kira treats type aliases as nominal types that cannot be called.
+// Use fn(Request) -> Response directly for handlers,
+// and fn(fn(Request) -> Response) -> fn(Request) -> Response for middleware.
 
 // ============================================================================
 // Helper Functions
@@ -77,9 +78,9 @@ let get_header: fn(Headers, string) -> Option[string] =
 // Basic Middleware
 // ============================================================================
 
-let add_header_middleware: fn(string, string) -> Middleware =
-    fn(name: string, value: string) -> Middleware {
-        return fn(next: Handler) -> Handler {
+let add_header_middleware: fn(string, string) -> fn(fn(Request) -> Response) -> fn(Request) -> Response =
+    fn(name: string, value: string) -> fn(fn(Request) -> Response) -> fn(Request) -> Response {
+        return fn(next: fn(Request) -> Response) -> fn(Request) -> Response {
             return fn(req: Request) -> Response {
                 let response: Response = next(req)
                 let new_header: Header = Header { name: name, value: value }
@@ -92,20 +93,21 @@ let add_header_middleware: fn(string, string) -> Middleware =
         }
     }
 
-let identity_middleware: fn() -> Middleware = fn() -> Middleware {
-    return fn(next: Handler) -> Handler {
-        return next
+let identity_middleware: fn() -> fn(fn(Request) -> Response) -> fn(Request) -> Response =
+    fn() -> fn(fn(Request) -> Response) -> fn(Request) -> Response {
+        return fn(next: fn(Request) -> Response) -> fn(Request) -> Response {
+            return next
+        }
     }
-}
 
-let apply_middleware: fn(Handler, Middleware) -> Handler =
-    fn(handler: Handler, mw: Middleware) -> Handler {
+let apply_middleware: fn(fn(Request) -> Response, fn(fn(Request) -> Response) -> fn(Request) -> Response) -> fn(Request) -> Response =
+    fn(handler: fn(Request) -> Response, mw: fn(fn(Request) -> Response) -> fn(Request) -> Response) -> fn(Request) -> Response {
         return mw(handler)
     }
 
-let compose: fn(Middleware, Middleware) -> Middleware =
-    fn(first: Middleware, second: Middleware) -> Middleware {
-        return fn(handler: Handler) -> Handler {
+let compose: fn(fn(fn(Request) -> Response) -> fn(Request) -> Response, fn(fn(Request) -> Response) -> fn(Request) -> Response) -> fn(fn(Request) -> Response) -> fn(Request) -> Response =
+    fn(first: fn(fn(Request) -> Response) -> fn(Request) -> Response, second: fn(fn(Request) -> Response) -> fn(Request) -> Response) -> fn(fn(Request) -> Response) -> fn(Request) -> Response {
+        return fn(handler: fn(Request) -> Response) -> fn(Request) -> Response {
             return first(second(handler))
         }
     }
@@ -115,33 +117,33 @@ let compose: fn(Middleware, Middleware) -> Middleware =
 // ============================================================================
 
 test "middleware type is function" {
-    let handler: Handler = fn(req: Request) -> Response {
+    let handler: fn(Request) -> Response = fn(req: Request) -> Response {
         return ok("test")
     }
-    let mw: Middleware = identity_middleware()
-    let wrapped: Handler = mw(handler)
+    let mw: fn(fn(Request) -> Response) -> fn(Request) -> Response = identity_middleware()
+    let wrapped: fn(Request) -> Response = mw(handler)
     let req: Request = make_request("/")
     let resp: Response = wrapped(req)
     assert(resp.body == "test")
 }
 
 test "identity middleware passes through" {
-    let handler: Handler = fn(req: Request) -> Response {
+    let handler: fn(Request) -> Response = fn(req: Request) -> Response {
         return ok("hello")
     }
-    let mw: Middleware = identity_middleware()
-    let wrapped: Handler = apply_middleware(handler, mw)
+    let mw: fn(fn(Request) -> Response) -> fn(Request) -> Response = identity_middleware()
+    let wrapped: fn(Request) -> Response = apply_middleware(handler, mw)
     let req: Request = make_request("/")
     let resp: Response = wrapped(req)
     assert(resp.body == "hello")
 }
 
 test "add_header_middleware adds header" {
-    let handler: Handler = fn(req: Request) -> Response {
+    let handler: fn(Request) -> Response = fn(req: Request) -> Response {
         return ok("test")
     }
-    let mw: Middleware = add_header_middleware("X-Custom", "value")
-    let wrapped: Handler = apply_middleware(handler, mw)
+    let mw: fn(fn(Request) -> Response) -> fn(Request) -> Response = add_header_middleware("X-Custom", "value")
+    let wrapped: fn(Request) -> Response = apply_middleware(handler, mw)
     let req: Request = make_request("/")
     let resp: Response = wrapped(req)
 
@@ -154,22 +156,22 @@ test "add_header_middleware adds header" {
 }
 
 test "middleware preserves body" {
-    let handler: Handler = fn(req: Request) -> Response {
+    let handler: fn(Request) -> Response = fn(req: Request) -> Response {
         return ok("original body")
     }
-    let mw: Middleware = add_header_middleware("X-Test", "test")
-    let wrapped: Handler = apply_middleware(handler, mw)
+    let mw: fn(fn(Request) -> Response) -> fn(Request) -> Response = add_header_middleware("X-Test", "test")
+    let wrapped: fn(Request) -> Response = apply_middleware(handler, mw)
     let req: Request = make_request("/")
     let resp: Response = wrapped(req)
     assert(resp.body == "original body")
 }
 
 test "middleware can read request" {
-    let handler: Handler = fn(req: Request) -> Response {
+    let handler: fn(Request) -> Response = fn(req: Request) -> Response {
         return ok(req.path)
     }
-    let mw: Middleware = identity_middleware()
-    let wrapped: Handler = apply_middleware(handler, mw)
+    let mw: fn(fn(Request) -> Response) -> fn(Request) -> Response = identity_middleware()
+    let wrapped: fn(Request) -> Response = apply_middleware(handler, mw)
     let req: Request = make_request("/api/users")
     let resp: Response = wrapped(req)
     assert(resp.body == "/api/users")
@@ -180,13 +182,13 @@ test "middleware can read request" {
 // ============================================================================
 
 test "compose two middleware" {
-    let handler: Handler = fn(req: Request) -> Response {
+    let handler: fn(Request) -> Response = fn(req: Request) -> Response {
         return ok("test")
     }
-    let mw1: Middleware = add_header_middleware("X-First", "1")
-    let mw2: Middleware = add_header_middleware("X-Second", "2")
-    let combined: Middleware = compose(mw1, mw2)
-    let wrapped: Handler = combined(handler)
+    let mw1: fn(fn(Request) -> Response) -> fn(Request) -> Response = add_header_middleware("X-First", "1")
+    let mw2: fn(fn(Request) -> Response) -> fn(Request) -> Response = add_header_middleware("X-Second", "2")
+    let combined: fn(fn(Request) -> Response) -> fn(Request) -> Response = compose(mw1, mw2)
+    let wrapped: fn(Request) -> Response = combined(handler)
     let req: Request = make_request("/")
     let resp: Response = wrapped(req)
 
@@ -206,13 +208,13 @@ test "compose two middleware" {
 }
 
 test "compose with identity" {
-    let handler: Handler = fn(req: Request) -> Response {
+    let handler: fn(Request) -> Response = fn(req: Request) -> Response {
         return ok("test")
     }
-    let mw: Middleware = add_header_middleware("X-Only", "value")
-    let id: Middleware = identity_middleware()
-    let combined: Middleware = compose(mw, id)
-    let wrapped: Handler = combined(handler)
+    let mw: fn(fn(Request) -> Response) -> fn(Request) -> Response = add_header_middleware("X-Only", "value")
+    let id: fn(fn(Request) -> Response) -> fn(Request) -> Response = identity_middleware()
+    let combined: fn(fn(Request) -> Response) -> fn(Request) -> Response = compose(mw, id)
+    let wrapped: fn(Request) -> Response = combined(handler)
     let req: Request = make_request("/")
     let resp: Response = wrapped(req)
 
@@ -225,11 +227,11 @@ test "compose with identity" {
 }
 
 test "apply_middleware applies single" {
-    let handler: Handler = fn(req: Request) -> Response {
+    let handler: fn(Request) -> Response = fn(req: Request) -> Response {
         return ok("base")
     }
-    let mw: Middleware = add_header_middleware("X-Applied", "yes")
-    let wrapped: Handler = apply_middleware(handler, mw)
+    let mw: fn(fn(Request) -> Response) -> fn(Request) -> Response = add_header_middleware("X-Applied", "yes")
+    let wrapped: fn(Request) -> Response = apply_middleware(handler, mw)
     let req: Request = make_request("/")
     let resp: Response = wrapped(req)
 
@@ -246,29 +248,30 @@ test "apply_middleware applies single" {
 // ============================================================================
 
 test "outer middleware executes first" {
-    // First middleware added should wrap outermost (execute first)
-    let handler: Handler = fn(req: Request) -> Response {
+    let handler: fn(Request) -> Response = fn(req: Request) -> Response {
         return ok("handler")
     }
 
-    let first_mw: Middleware = fn(next: Handler) -> Handler {
-        return fn(r: Request) -> Response {
-            let resp: Response = next(r)
-            let h: Header = Header { name: "X-Order", value: "first-" + resp.body }
-            return Response { status: resp.status, headers: Cons(h, resp.headers), body: resp.body }
+    let first_mw: fn(fn(Request) -> Response) -> fn(Request) -> Response =
+        fn(next: fn(Request) -> Response) -> fn(Request) -> Response {
+            return fn(r: Request) -> Response {
+                let resp: Response = next(r)
+                let h: Header = Header { name: "X-Order", value: "first-" + resp.body }
+                return Response { status: resp.status, headers: Cons(h, resp.headers), body: resp.body }
+            }
         }
-    }
 
-    let second_mw: Middleware = fn(next: Handler) -> Handler {
-        return fn(r: Request) -> Response {
-            let resp: Response = next(r)
-            let h: Header = Header { name: "X-Inner", value: "second" }
-            return Response { status: resp.status, headers: Cons(h, resp.headers), body: resp.body }
+    let second_mw: fn(fn(Request) -> Response) -> fn(Request) -> Response =
+        fn(next: fn(Request) -> Response) -> fn(Request) -> Response {
+            return fn(r: Request) -> Response {
+                let resp: Response = next(r)
+                let h: Header = Header { name: "X-Inner", value: "second" }
+                return Response { status: resp.status, headers: Cons(h, resp.headers), body: resp.body }
+            }
         }
-    }
 
-    let combined: Middleware = compose(first_mw, second_mw)
-    let wrapped: Handler = combined(handler)
+    let combined: fn(fn(Request) -> Response) -> fn(Request) -> Response = compose(first_mw, second_mw)
+    let wrapped: fn(Request) -> Response = combined(handler)
     let req: Request = make_request("/")
     let resp: Response = wrapped(req)
 
@@ -288,18 +291,18 @@ test "outer middleware executes first" {
 }
 
 test "middleware can short circuit" {
-    let handler: Handler = fn(req: Request) -> Response {
+    let handler: fn(Request) -> Response = fn(req: Request) -> Response {
         return ok("should not reach")
     }
 
-    let blocker: Middleware = fn(next: Handler) -> Handler {
-        return fn(r: Request) -> Response {
-            // Don't call next, return early
-            return ok("blocked")
+    let blocker: fn(fn(Request) -> Response) -> fn(Request) -> Response =
+        fn(next: fn(Request) -> Response) -> fn(Request) -> Response {
+            return fn(r: Request) -> Response {
+                return ok("blocked")
+            }
         }
-    }
 
-    let wrapped: Handler = apply_middleware(handler, blocker)
+    let wrapped: fn(Request) -> Response = apply_middleware(handler, blocker)
     let req: Request = make_request("/")
     let resp: Response = wrapped(req)
     assert(resp.body == "blocked")
