@@ -1,10 +1,10 @@
+module http.url
+
 /// URL utilities for kira-http
 ///
 /// This module provides URL parsing, building, and query parameter utilities.
 /// URLs are parsed into their component parts (scheme, host, port, path, query, fragment)
 /// and can be reconstructed back into string form.
-
-module http.url
 
 import http.types.{HttpError, QueryParam}
 

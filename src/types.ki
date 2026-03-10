@@ -1,9 +1,9 @@
+module http.types
+
 /// Core types for kira-http
 ///
 /// This module defines the fundamental types used throughout the HTTP library:
 /// Method, Status, Header, Headers, and HttpError.
-
-module http.types
 
 /// HTTP request methods
 pub type Method =

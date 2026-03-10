@@ -1,10 +1,10 @@
+module http.middleware
+
 /// Middleware system for kira-http
 ///
 /// This module provides middleware functionality for HTTP request/response processing.
 /// Middleware functions wrap handlers to add cross-cutting concerns like logging,
 /// CORS, and timeouts.
-
-module http.middleware
 
 import http.types.{Method, Status, Header, Headers}
 import http.request.{Request}

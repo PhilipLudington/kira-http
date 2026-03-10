@@ -1,9 +1,9 @@
+module http.response
+
 /// Response types and helpers for kira-http
 ///
 /// This module provides the Response type and helper functions for
 /// creating common HTTP responses.
-
-module http.response
 
 import http.types.{Status, Header, Headers}
 import http.headers.{CONTENT_TYPE_JSON, CONTENT_TYPE_TEXT}

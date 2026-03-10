@@ -1,9 +1,9 @@
+module http.request
+
 /// Request types and builder for kira-http
 ///
 /// This module provides the Request type for representing HTTP requests
 /// and a RequestBuilder for constructing requests with a fluent interface.
-
-module http.request
 
 import http.types.{Method, Header, Headers, QueryParam}
 import http.headers.{set_header}

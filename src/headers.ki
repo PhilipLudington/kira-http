@@ -1,9 +1,9 @@
+module http.headers
+
 /// Header utilities for kira-http
 ///
 /// This module provides functions for working with HTTP headers:
 /// getting, setting, and removing headers, plus common header helpers.
-
-module http.headers
 
 import http.types.{Header, Headers}
 

@@ -1,10 +1,10 @@
+module http.server
+
 /// HTTP server for kira-http
 ///
 /// This module provides an effectful HTTP server that listens for requests
 /// and routes them through a configured router. All server operations are
 /// explicitly marked as effects since they perform network IO.
-
-module http.server
 
 import http.types.{Method, Status, Header, Headers, HttpError, QueryParam}
 import http.request.{Request}

@@ -1,3 +1,5 @@
+module http
+
 /// kira-http - HTTP client/server library for Kira
 ///
 /// This library provides HTTP client and server functionality with explicit
@@ -51,8 +53,6 @@
 ///     return
 /// }
 /// ```
-
-module http
 
 // ============================================================================
 // Re-exports from submodules

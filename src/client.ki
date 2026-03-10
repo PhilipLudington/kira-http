@@ -1,9 +1,9 @@
+module http.client
+
 /// HTTP client for kira-http
 ///
 /// This module provides effectful functions for making HTTP requests.
 /// All functions that perform network IO are marked with `effect`.
-
-module http.client
 
 import http.types.{Method, HttpError, Headers}
 import http.request.{Request, RequestBuilder, build, new_request, with_body, with_header}

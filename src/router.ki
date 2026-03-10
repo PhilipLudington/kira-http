@@ -1,9 +1,9 @@
+module http.router
+
 /// Router and route matching for kira-http
 ///
 /// This module provides routing functionality for HTTP servers, including
 /// route definition, path parameter extraction, and request matching.
-
-module http.router
 
 import http.types.{Method, QueryParam}
 import http.request.{Request, with_path_params}

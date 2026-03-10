@@ -1,9 +1,9 @@
+module http.status
+
 /// Status code utilities for kira-http
 ///
 /// This module provides functions for working with HTTP status codes:
 /// converting between Status and numeric codes, and checking status categories.
-
-module http.status
 
 import http.types.{Status}
 

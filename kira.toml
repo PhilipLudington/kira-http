@@ -1,0 +1,4 @@
+# kira-http package configuration
+
+[modules]
+http = "src"
