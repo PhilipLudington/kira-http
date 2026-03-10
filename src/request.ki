@@ -225,12 +225,12 @@ type PathAndQuery = {
 let extract_path_and_query: fn(string) -> PathAndQuery =
     fn(url: string) -> PathAndQuery {
         // Find the start of the path (after scheme://host)
-        let scheme_end: Option[i32] = std.string.index_of(url, "://")
+        let scheme_end: Option[i64] = std.string.index_of(url, "://")
         var rest: string
 
         match scheme_end {
             Some(idx) => {
-                rest = std.string.substring(url, idx + 3, std.string.length(url))
+                rest = std.string.substring(url, idx + 3, std.string.length(url)) ?? ""
             }
             None => {
                 rest = url
@@ -238,12 +238,12 @@ let extract_path_and_query: fn(string) -> PathAndQuery =
         }
 
         // Find start of path
-        let path_start: Option[i32] = std.string.index_of(rest, "/")
+        let path_start: Option[i64] = std.string.index_of(rest, "/")
         var path_portion: string
 
         match path_start {
             Some(idx) => {
-                path_portion = std.string.substring(rest, idx, std.string.length(rest))
+                path_portion = std.string.substring(rest, idx, std.string.length(rest)) ?? ""
             }
             None => {
                 path_portion = "/"
@@ -251,20 +251,20 @@ let extract_path_and_query: fn(string) -> PathAndQuery =
         }
 
         // Split path from query
-        let query_start: Option[i32] = std.string.index_of(path_portion, "?")
+        let query_start: Option[i64] = std.string.index_of(path_portion, "?")
         var path: string
         var query: List[QueryParam]
 
         match query_start {
             Some(idx) => {
-                path = std.string.substring(path_portion, 0, idx)
-                let query_string: string = std.string.substring(path_portion, idx + 1, std.string.length(path_portion))
+                path = std.string.substring(path_portion, 0, idx) ?? ""
+                let query_string: string = std.string.substring(path_portion, idx + 1, std.string.length(path_portion)) ?? ""
                 // Remove fragment if present
-                let fragment_idx: Option[i32] = std.string.index_of(query_string, "#")
+                let fragment_idx: Option[i64] = std.string.index_of(query_string, "#")
                 var clean_query: string
                 match fragment_idx {
                     Some(fidx) => {
-                        clean_query = std.string.substring(query_string, 0, fidx)
+                        clean_query = std.string.substring(query_string, 0, fidx) ?? ""
                     }
                     None => {
                         clean_query = query_string
@@ -274,10 +274,10 @@ let extract_path_and_query: fn(string) -> PathAndQuery =
             }
             None => {
                 // Remove fragment from path if present
-                let fragment_idx: Option[i32] = std.string.index_of(path_portion, "#")
+                let fragment_idx: Option[i64] = std.string.index_of(path_portion, "#")
                 match fragment_idx {
                     Some(fidx) => {
-                        path = std.string.substring(path_portion, 0, fidx)
+                        path = std.string.substring(path_portion, 0, fidx) ?? ""
                     }
                     None => {
                         path = path_portion

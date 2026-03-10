@@ -6,7 +6,7 @@ module http.response
 /// creating common HTTP responses.
 
 import http.types.{Status, Header, Headers}
-import http.headers.{CONTENT_TYPE_JSON, CONTENT_TYPE_TEXT}
+import http.headers.{content_type}
 
 /// An HTTP response
 ///
@@ -32,7 +32,7 @@ pub type Response = {
 pub let ok: fn(string) -> Response = fn(body: string) -> Response {
     return Response {
         status: OK,
-        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        headers: Cons(content_type("text/plain"), Nil),
         body: body
     }
 }
@@ -52,7 +52,7 @@ pub let ok: fn(string) -> Response = fn(body: string) -> Response {
 pub let created: fn(string) -> Response = fn(body: string) -> Response {
     return Response {
         status: Created,
-        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        headers: Cons(content_type("text/plain"), Nil),
         body: body
     }
 }
@@ -89,7 +89,7 @@ pub let no_content: fn() -> Response = fn() -> Response {
 pub let bad_request: fn(string) -> Response = fn(message: string) -> Response {
     return Response {
         status: BadRequest,
-        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        headers: Cons(content_type("text/plain"), Nil),
         body: message
     }
 }
@@ -104,7 +104,7 @@ pub let bad_request: fn(string) -> Response = fn(message: string) -> Response {
 pub let unauthorized: fn(string) -> Response = fn(message: string) -> Response {
     return Response {
         status: Unauthorized,
-        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        headers: Cons(content_type("text/plain"), Nil),
         body: message
     }
 }
@@ -119,7 +119,7 @@ pub let unauthorized: fn(string) -> Response = fn(message: string) -> Response {
 pub let forbidden: fn(string) -> Response = fn(message: string) -> Response {
     return Response {
         status: Forbidden,
-        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        headers: Cons(content_type("text/plain"), Nil),
         body: message
     }
 }
@@ -136,7 +136,7 @@ pub let forbidden: fn(string) -> Response = fn(message: string) -> Response {
 pub let not_found: fn() -> Response = fn() -> Response {
     return Response {
         status: NotFound,
-        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        headers: Cons(content_type("text/plain"), Nil),
         body: "Not Found"
     }
 }
@@ -148,7 +148,7 @@ pub let not_found: fn() -> Response = fn() -> Response {
 pub let method_not_allowed: fn() -> Response = fn() -> Response {
     return Response {
         status: MethodNotAllowed,
-        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        headers: Cons(content_type("text/plain"), Nil),
         body: "Method Not Allowed"
     }
 }
@@ -163,7 +163,7 @@ pub let method_not_allowed: fn() -> Response = fn() -> Response {
 pub let conflict: fn(string) -> Response = fn(message: string) -> Response {
     return Response {
         status: Conflict,
-        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        headers: Cons(content_type("text/plain"), Nil),
         body: message
     }
 }
@@ -183,7 +183,7 @@ pub let conflict: fn(string) -> Response = fn(message: string) -> Response {
 pub let internal_error: fn(string) -> Response = fn(message: string) -> Response {
     return Response {
         status: InternalError,
-        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        headers: Cons(content_type("text/plain"), Nil),
         body: message
     }
 }
@@ -198,7 +198,7 @@ pub let internal_error: fn(string) -> Response = fn(message: string) -> Response
 pub let service_unavailable: fn(string) -> Response = fn(message: string) -> Response {
     return Response {
         status: ServiceUnavailable,
-        headers: Cons(CONTENT_TYPE_TEXT, Nil),
+        headers: Cons(content_type("text/plain"), Nil),
         body: message
     }
 }
@@ -223,7 +223,7 @@ pub let json_response: fn(Status, string) -> Response =
     fn(status: Status, json_body: string) -> Response {
         return Response {
             status: status,
-            headers: Cons(CONTENT_TYPE_JSON, Nil),
+            headers: Cons(content_type("application/json"), Nil),
             body: json_body
         }
     }

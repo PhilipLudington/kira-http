@@ -1,0 +1,17 @@
+# http package configuration
+
+[package]
+name = "http"
+
+[modules]
+types = "types.ki"
+client = "client.ki"
+headers = "headers.ki"
+lib = "lib.ki"
+middleware = "middleware.ki"
+request = "request.ki"
+response = "response.ki"
+router = "router.ki"
+server = "server.ki"
+status = "status.ki"
+url = "url.ki"

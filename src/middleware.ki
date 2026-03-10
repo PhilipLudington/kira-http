@@ -43,7 +43,8 @@ pub let logging: fn() -> Middleware = fn() -> Middleware {
         return fn(req: Request) -> Response {
             // In a real implementation, this would log to stdout/stderr
             // For now, we add debug headers to track the middleware execution
-            let response: Response = next(req)
+            let next_fn: fn(Request) -> Response = next
+            let response: Response = next_fn(req)
             let with_debug: Response = add_debug_header(response, "X-Request-Path", req.path)
             return add_debug_header(with_debug, "X-Request-Method", method_to_string(req.method))
         }
@@ -113,7 +114,8 @@ pub let cors: fn(List[string]) -> Middleware =
                     return add_cors_headers(preflight_response, origins)
                 }
 
-                let response: Response = next(req)
+                let next_fn: fn(Request) -> Response = next
+                let response: Response = next_fn(req)
                 return add_cors_headers(response, origins)
             }
         }
@@ -187,7 +189,8 @@ pub let timeout: fn(i32) -> Middleware =
     fn(ms: i32) -> Middleware {
         return fn(next: Handler) -> Handler {
             return fn(req: Request) -> Response {
-                let response: Response = next(req)
+                let next_fn: fn(Request) -> Response = next
+                let response: Response = next_fn(req)
                 // Add timeout header for server to enforce
                 // In a real implementation, this would be handled by the server
                 return Response {
@@ -218,7 +221,9 @@ pub let timeout: fn(i32) -> Middleware =
 pub let compose: fn(Middleware, Middleware) -> Middleware =
     fn(outer: Middleware, inner: Middleware) -> Middleware {
         return fn(handler: Handler) -> Handler {
-            return outer(inner(handler))
+            let inner_fn: fn(Handler) -> Handler = inner
+            let outer_fn: fn(Handler) -> Handler = outer
+            return outer_fn(inner_fn(handler))
         }
     }
 
@@ -264,7 +269,8 @@ pub let compose_all: fn(List[Middleware]) -> Middleware =
 /// A new handler with the middleware applied
 pub let apply_middleware: fn(Handler, Middleware) -> Handler =
     fn(handler: Handler, middleware: Middleware) -> Handler {
-        return middleware(handler)
+        let mw_fn: fn(Handler) -> Handler = middleware
+        return mw_fn(handler)
     }
 
 /// Applies a list of middleware to a handler
@@ -280,5 +286,6 @@ pub let apply_middleware: fn(Handler, Middleware) -> Handler =
 pub let apply_all_middleware: fn(Handler, List[Middleware]) -> Handler =
     fn(handler: Handler, middlewares: List[Middleware]) -> Handler {
         let composed: Middleware = compose_all(middlewares)
-        return composed(handler)
+        let composed_fn: fn(Handler) -> Handler = composed
+        return composed_fn(handler)
     }

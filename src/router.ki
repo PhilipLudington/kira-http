@@ -87,7 +87,7 @@ let append_route: fn(List[Route], Route) -> List[Route] =
         var result: List[Route]
         match routes {
             Nil => { result = Cons(route, Nil) }
-            Cons(head, tail) => { result = Cons(head, append_route(tail, route)) }
+            Cons(first, tail) => { result = Cons(first, append_route(tail, route)) }
         }
         return result
     }
@@ -117,8 +117,8 @@ pub let add_routes: fn(Router, List[Route]) -> Router =
         var result: Router
         match routes {
             Nil => { result = router }
-            Cons(route, rest) => {
-                let updated: Router = add_route(router, route)
+            Cons(r, rest) => {
+                let updated: Router = add_route(router, r)
                 result = add_routes(updated, rest)
             }
         }
@@ -181,7 +181,7 @@ let append_middleware: fn(List[Middleware], Middleware) -> List[Middleware] =
         var result: List[Middleware]
         match middlewares {
             Nil => { result = Cons(mw, Nil) }
-            Cons(head, tail) => { result = Cons(head, append_middleware(tail, mw)) }
+            Cons(first, tail) => { result = Cons(first, append_middleware(tail, mw)) }
         }
         return result
     }
@@ -340,7 +340,8 @@ pub let handle_request: fn(Router, Request) -> Response =
 
         // Apply middleware to the handler
         let wrapped_handler: Handler = apply_all_middleware(base_handler, router.middleware)
-        return wrapped_handler(updated_request)
+        let handler_fn: fn(Request) -> Response = wrapped_handler
+        return handler_fn(updated_request)
     }
 
 type MatchResult = {
@@ -432,7 +433,7 @@ let match_segments: fn(List[string], List[string], List[QueryParam]) -> Option[L
             (Cons(pattern_seg, pattern_rest), Cons(path_seg, path_rest)) => {
                 if is_param_segment(pattern_seg) {
                     // Parameter segment - extract and decode value
-                    let param_name: string = std.string.substring(pattern_seg, 1, std.string.length(pattern_seg))
+                    let param_name: string = std.string.substring(pattern_seg, 1, std.string.length(pattern_seg)) ?? ""
                     let decoded_value: string = url_decode(path_seg)
                     let param: QueryParam = QueryParam { key: param_name, value: decoded_value }
                     let new_params: List[QueryParam] = Cons(param, params)

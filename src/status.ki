@@ -47,28 +47,28 @@ pub let status_code: fn(Status) -> i32 = fn(status: Status) -> i32 {
 /// # Returns
 /// The corresponding Status variant, or Custom(code) for unknown codes
 pub let status_from_code: fn(i32) -> Status = fn(code: i32) -> Status {
-    var status: Status
+    var result: Status
     match code {
-        200 => { status = OK }
-        201 => { status = Created }
-        202 => { status = Accepted }
-        204 => { status = NoContent }
-        301 => { status = MovedPermanently }
-        302 => { status = Found }
-        304 => { status = NotModified }
-        400 => { status = BadRequest }
-        401 => { status = Unauthorized }
-        403 => { status = Forbidden }
-        404 => { status = NotFound }
-        405 => { status = MethodNotAllowed }
-        409 => { status = Conflict }
-        500 => { status = InternalError }
-        501 => { status = NotImplemented }
-        502 => { status = BadGateway }
-        503 => { status = ServiceUnavailable }
-        _ => { status = Custom(code) }
+        200 => { result = OK }
+        201 => { result = Created }
+        202 => { result = Accepted }
+        204 => { result = NoContent }
+        301 => { result = MovedPermanently }
+        302 => { result = Found }
+        304 => { result = NotModified }
+        400 => { result = BadRequest }
+        401 => { result = Unauthorized }
+        403 => { result = Forbidden }
+        404 => { result = NotFound }
+        405 => { result = MethodNotAllowed }
+        409 => { result = Conflict }
+        500 => { result = InternalError }
+        501 => { result = NotImplemented }
+        502 => { result = BadGateway }
+        503 => { result = ServiceUnavailable }
+        _ => { result = Custom(code) }
     }
-    return status
+    return result
 }
 
 /// Checks if a status indicates success (2xx)

@@ -20,7 +20,7 @@ import http.types.{HttpError, QueryParam}
 pub type Url = {
     scheme: string,
     host: string,
-    port: Option[i32],
+    port: Option[i64],
     path: string,
     query: Option[string],
     fragment: Option[string]
@@ -46,14 +46,14 @@ pub let parse_url: fn(string) -> Result[Url, HttpError] =
         }
 
         // Parse scheme (everything before "://")
-        let scheme_end: Option[i32] = std.string.index_of(url, "://")
+        let scheme_end: Option[i64] = std.string.index_of(url, "://")
         var scheme: string
         var rest: string
 
         match scheme_end {
             Some(idx) => {
-                scheme = std.string.substring(url, 0, idx)
-                rest = std.string.substring(url, idx + 3, std.string.length(url))
+                scheme = std.string.substring(url, 0, idx) ?? ""
+                rest = std.string.substring(url, idx + 3, std.string.length(url)) ?? ""
             }
             None => {
                 return Err(InvalidUrl("missing scheme"))
@@ -67,11 +67,11 @@ pub let parse_url: fn(string) -> Result[Url, HttpError] =
 
         // Parse fragment (everything after "#")
         var fragment: Option[string]
-        let fragment_idx: Option[i32] = std.string.index_of(rest, "#")
+        let fragment_idx: Option[i64] = std.string.index_of(rest, "#")
         match fragment_idx {
             Some(idx) => {
-                fragment = Some(std.string.substring(rest, idx + 1, std.string.length(rest)))
-                rest = std.string.substring(rest, 0, idx)
+                fragment = std.string.substring(rest, idx + 1, std.string.length(rest))
+                rest = std.string.substring(rest, 0, idx) ?? ""
             }
             None => {
                 fragment = None
@@ -80,11 +80,11 @@ pub let parse_url: fn(string) -> Result[Url, HttpError] =
 
         // Parse query (everything after "?")
         var query: Option[string]
-        let query_idx: Option[i32] = std.string.index_of(rest, "?")
+        let query_idx: Option[i64] = std.string.index_of(rest, "?")
         match query_idx {
             Some(idx) => {
-                query = Some(std.string.substring(rest, idx + 1, std.string.length(rest)))
-                rest = std.string.substring(rest, 0, idx)
+                query = std.string.substring(rest, idx + 1, std.string.length(rest))
+                rest = std.string.substring(rest, 0, idx) ?? ""
             }
             None => {
                 query = None
@@ -93,11 +93,11 @@ pub let parse_url: fn(string) -> Result[Url, HttpError] =
 
         // Parse path (everything after first "/" in host portion)
         var path: string
-        let path_idx: Option[i32] = std.string.index_of(rest, "/")
+        let path_idx: Option[i64] = std.string.index_of(rest, "/")
         match path_idx {
             Some(idx) => {
-                path = std.string.substring(rest, idx, std.string.length(rest))
-                rest = std.string.substring(rest, 0, idx)
+                path = std.string.substring(rest, idx, std.string.length(rest)) ?? ""
+                rest = std.string.substring(rest, 0, idx) ?? ""
             }
             None => {
                 path = "/"
@@ -111,14 +111,14 @@ pub let parse_url: fn(string) -> Result[Url, HttpError] =
         }
 
         var host: string
-        var port: Option[i32]
+        var port: Option[i64]
 
-        let port_idx: Option[i32] = std.string.index_of(rest, ":")
+        let port_idx: Option[i64] = std.string.index_of(rest, ":")
         match port_idx {
             Some(idx) => {
-                host = std.string.substring(rest, 0, idx)
-                let port_str: string = std.string.substring(rest, idx + 1, std.string.length(rest))
-                let port_result: Option[i32] = std.string.parse_int(port_str)
+                host = std.string.substring(rest, 0, idx) ?? ""
+                let port_str: string = std.string.substring(rest, idx + 1, std.string.length(rest)) ?? ""
+                let port_result: Option[i64] = std.string.parse_int(port_str)
                 match port_result {
                     Some(p) => {
                         if p < 0 or p > 65535 {
@@ -220,15 +220,15 @@ pub let parse_query_string: fn(string) -> List[QueryParam] =
 let parse_query_pairs: fn(string) -> List[QueryParam] =
     fn(query: string) -> List[QueryParam] {
         // Find the next "&" delimiter
-        let amp_idx: Option[i32] = std.string.index_of(query, "&")
+        let amp_idx: Option[i64] = std.string.index_of(query, "&")
 
         var current_pair: string
         var remaining: Option[string]
 
         match amp_idx {
             Some(idx) => {
-                current_pair = std.string.substring(query, 0, idx)
-                remaining = Some(std.string.substring(query, idx + 1, std.string.length(query)))
+                current_pair = std.string.substring(query, 0, idx) ?? ""
+                remaining = std.string.substring(query, idx + 1, std.string.length(query))
             }
             None => {
                 current_pair = query
@@ -237,13 +237,13 @@ let parse_query_pairs: fn(string) -> List[QueryParam] =
         }
 
         // Parse the current key=value pair
-        let eq_idx: Option[i32] = std.string.index_of(current_pair, "=")
+        let eq_idx: Option[i64] = std.string.index_of(current_pair, "=")
         var param: QueryParam
 
         match eq_idx {
             Some(idx) => {
-                let raw_key: string = std.string.substring(current_pair, 0, idx)
-                let raw_value: string = std.string.substring(current_pair, idx + 1, std.string.length(current_pair))
+                let raw_key: string = std.string.substring(current_pair, 0, idx) ?? ""
+                let raw_value: string = std.string.substring(current_pair, idx + 1, std.string.length(current_pair)) ?? ""
                 param = QueryParam {
                     key: url_decode(raw_key),
                     value: url_decode(raw_value)
@@ -345,8 +345,14 @@ let split_path: fn(string) -> List[string] =
     fn(path: string) -> List[string] {
         // Remove leading slash if present
         var working_path: string
-        if std.string.length(path) > 0 and std.string.char_at(path, 0) == '/' {
-            working_path = std.string.substring(path, 1, std.string.length(path))
+        let first_char: Option[char] = std.string.char_at(path, 0)
+        var is_slash: bool = false
+        match first_char {
+            Some(c) => { is_slash = c == '/' }
+            None => { is_slash = false }
+        }
+        if std.string.length(path) > 0 and is_slash {
+            working_path = std.string.substring(path, 1, std.string.length(path)) ?? ""
         } else {
             working_path = path
         }
@@ -360,12 +366,12 @@ let split_path: fn(string) -> List[string] =
 
 let split_by_slash: fn(string) -> List[string] =
     fn(s: string) -> List[string] {
-        let slash_idx: Option[i32] = std.string.index_of(s, "/")
+        let slash_idx: Option[i64] = std.string.index_of(s, "/")
 
         match slash_idx {
             Some(idx) => {
-                let segment: string = std.string.substring(s, 0, idx)
-                let rest: string = std.string.substring(s, idx + 1, std.string.length(s))
+                let segment: string = std.string.substring(s, 0, idx) ?? ""
+                let rest: string = std.string.substring(s, idx + 1, std.string.length(s)) ?? ""
                 if std.string.length(rest) > 0 {
                     return Cons(segment, split_by_slash(rest))
                 } else {
@@ -388,8 +394,14 @@ let find_path_param: fn(List[string], List[string], string) -> Option[string] =
                     Nil => { result = None }
                     Cons(path_seg, path_rest) => {
                         // Check if pattern segment is a parameter (starts with ":")
-                        if std.string.length(pattern_seg) > 0 and std.string.char_at(pattern_seg, 0) == ':' {
-                            let param_name: string = std.string.substring(pattern_seg, 1, std.string.length(pattern_seg))
+                        let param_ch: Option[char] = std.string.char_at(pattern_seg, 0)
+                        var is_colon: bool = false
+                        match param_ch {
+                            Some(c) => { is_colon = c == ':' }
+                            None => { is_colon = false }
+                        }
+                        if std.string.length(pattern_seg) > 0 and is_colon {
+                            let param_name: string = std.string.substring(pattern_seg, 1, std.string.length(pattern_seg)) ?? ""
                             if param_name == name {
                                 // Decode URL-encoded characters in path parameter value
                                 result = Some(url_decode(path_seg))
@@ -436,7 +448,13 @@ let segments_match: fn(List[string], List[string]) -> bool =
                     Nil => { result = false }
                     Cons(path_seg, path_rest) => {
                         // Parameter segments match anything
-                        if std.string.length(pattern_seg) > 0 and std.string.char_at(pattern_seg, 0) == ':' {
+                        let seg_ch: Option[char] = std.string.char_at(pattern_seg, 0)
+                        var seg_is_colon: bool = false
+                        match seg_ch {
+                            Some(c) => { seg_is_colon = c == ':' }
+                            None => { seg_is_colon = false }
+                        }
+                        if std.string.length(pattern_seg) > 0 and seg_is_colon {
                             result = segments_match(pattern_rest, path_rest)
                         } else if pattern_seg == path_seg {
                             result = segments_match(pattern_rest, path_rest)
@@ -478,7 +496,12 @@ let decode_chars: fn(string, i32, i32, string) -> string =
             return result
         }
 
-        let ch: char = std.string.char_at(s, pos)
+        let ch_opt: Option[char] = std.string.char_at(s, pos)
+        var ch: char
+        match ch_opt {
+            Some(c) => { ch = c }
+            None => { return result }
+        }
 
         // Handle + as space
         if ch == '+' {
@@ -487,8 +510,18 @@ let decode_chars: fn(string, i32, i32, string) -> string =
 
         // Handle %XX encoding
         if ch == '%' and pos + 2 < len {
-            let hex1: char = std.string.char_at(s, pos + 1)
-            let hex2: char = std.string.char_at(s, pos + 2)
+            let hex1_opt: Option[char] = std.string.char_at(s, pos + 1)
+            let hex2_opt: Option[char] = std.string.char_at(s, pos + 2)
+            var hex1: char
+            var hex2: char
+            match hex1_opt {
+                Some(c) => { hex1 = c }
+                None => { return decode_chars(s, pos + 1, len, result + std.char.to_string(ch)) }
+            }
+            match hex2_opt {
+                Some(c) => { hex2 = c }
+                None => { return decode_chars(s, pos + 1, len, result + std.char.to_string(ch)) }
+            }
             let decoded_char: Option[char] = decode_hex_pair(hex1, hex2)
             match decoded_char {
                 Some(decoded) => {

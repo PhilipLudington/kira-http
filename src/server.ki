@@ -24,7 +24,7 @@ import http.url.{parse_query_string}
 /// * `router` - The router configuration with routes and middleware
 ///
 /// # Returns
-/// Result[void, HttpError] - Ok(void) if the server shuts down gracefully,
+/// Result[bool, HttpError] - Ok(true) if the server shuts down gracefully,
 /// or Err(HttpError) if an error occurs during startup or operation
 ///
 /// # Example
@@ -36,7 +36,7 @@ import http.url.{parse_query_string}
 ///     return
 /// }
 /// ```
-pub effect fn serve(port: i32, router: Router) -> Result[void, HttpError] {
+pub effect fn serve(port: i32, router: Router) -> Result[bool, HttpError] {
     // Validate port range
     if port < 1 or port > 65535 {
         return Err(InvalidUrl("Port must be between 1 and 65535"))
@@ -59,7 +59,7 @@ pub effect fn serve(port: i32, router: Router) -> Result[void, HttpError] {
 
         match conn_result {
             Ok(conn) => {
-                let handle_result: Result[void, HttpError] = handle_connection(conn, router)
+                let handle_result: Result[bool, HttpError] = handle_connection(conn, router)
                 match handle_result {
                     Ok(_) => { }
                     Err(e) => {
@@ -75,7 +75,7 @@ pub effect fn serve(port: i32, router: Router) -> Result[void, HttpError] {
         }
     }
 
-    return Ok(void)
+    return Ok(true)
 }
 
 /// Starts an HTTP server with a list of routes
@@ -88,7 +88,7 @@ pub effect fn serve(port: i32, router: Router) -> Result[void, HttpError] {
 /// * `routes` - The list of routes to handle
 ///
 /// # Returns
-/// Result[void, HttpError] - Ok(void) if the server shuts down gracefully,
+/// Result[bool, HttpError] - Ok(true) if the server shuts down gracefully,
 /// or Err(HttpError) if an error occurs
 ///
 /// # Example
@@ -98,7 +98,7 @@ pub effect fn serve(port: i32, router: Router) -> Result[void, HttpError] {
 ///     return
 /// }
 /// ```
-pub effect fn serve_routes(port: i32, routes: List[Route]) -> Result[void, HttpError] {
+pub effect fn serve_routes(port: i32, routes: List[Route]) -> Result[bool, HttpError] {
     let router: Router = add_routes(new_router(), routes)
     return serve(port, router)
 }
@@ -106,7 +106,7 @@ pub effect fn serve_routes(port: i32, routes: List[Route]) -> Result[void, HttpE
 /// Handles a single HTTP connection
 ///
 /// Reads the request, routes it, and sends the response.
-effect fn handle_connection(conn: TcpConnection, router: Router) -> Result[void, HttpError] {
+effect fn handle_connection(conn: TcpConnection, router: Router) -> Result[bool, HttpError] {
     // Read raw HTTP request
     let raw_request_result: Result[string, string] = std.net.read(conn)
 
@@ -129,8 +129,8 @@ effect fn handle_connection(conn: TcpConnection, router: Router) -> Result[void,
                 headers: Nil,
                 body: "Bad Request: " + http_error_to_string(e)
             })
-            std.net.write(conn, error_response)?
-            std.net.close(conn)?
+            let write_result: Result[bool, string] = std.net.write(conn, error_response)
+            let close_result: Result[bool, string] = std.net.close(conn)
             return Err(e)
         }
     }
@@ -140,12 +140,20 @@ effect fn handle_connection(conn: TcpConnection, router: Router) -> Result[void,
 
     // Serialize and send response
     let raw_response: string = serialize_http_response(response)
-    std.net.write(conn, raw_response)?
+    let write_result: Result[bool, string] = std.net.write(conn, raw_response)
+    match write_result {
+        Ok(_) => { }
+        Err(e) => { return Err(ConnectionFailed(e)) }
+    }
 
     // Close connection (HTTP/1.0 style for simplicity)
-    std.net.close(conn)?
+    let close_result: Result[bool, string] = std.net.close(conn)
+    match close_result {
+        Ok(_) => { }
+        Err(e) => { return Err(ConnectionFailed(e)) }
+    }
 
-    return Ok(void)
+    return Ok(true)
 }
 
 /// Parses a raw HTTP request string into a Request
@@ -226,15 +234,15 @@ type PathQueryResult = {
 
 let split_path_query: fn(string) -> PathQueryResult =
     fn(path_with_query: string) -> PathQueryResult {
-        let query_idx: Option[i32] = std.string.index_of(path_with_query, "?")
+        let query_idx: Option[i64] = std.string.index_of(path_with_query, "?")
 
         var path: string
         var query: List[QueryParam]
 
         match query_idx {
             Some(idx) => {
-                path = std.string.substring(path_with_query, 0, idx)
-                let query_string: string = std.string.substring(path_with_query, idx + 1, std.string.length(path_with_query))
+                path = std.string.substring(path_with_query, 0, idx) ?? ""
+                let query_string: string = std.string.substring(path_with_query, idx + 1, std.string.length(path_with_query)) ?? ""
                 query = parse_query_string(query_string)
             }
             None => {
@@ -300,14 +308,14 @@ let parse_headers_and_body: fn(List[string]) -> HeadersBodyResult =
 
 let parse_header_line: fn(string) -> Option[Header] =
     fn(line: string) -> Option[Header] {
-        let colon_idx: Option[i32] = std.string.index_of(line, ":")
+        let colon_idx: Option[i64] = std.string.index_of(line, ":")
 
         var result: Option[Header]
 
         match colon_idx {
             Some(idx) => {
-                let name: string = std.string.trim(std.string.substring(line, 0, idx))
-                let value: string = std.string.trim(std.string.substring(line, idx + 1, std.string.length(line)))
+                let name: string = std.string.trim(std.string.substring(line, 0, idx) ?? "")
+                let value: string = std.string.trim(std.string.substring(line, idx + 1, std.string.length(line)) ?? "")
                 result = Some(Header { name: name, value: value })
             }
             None => {
