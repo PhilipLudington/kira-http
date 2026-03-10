@@ -50,6 +50,15 @@ type Response = {
 
 type Handler = fn(Request) -> Response
 
+let unwrap_str: fn(Option[string]) -> string = fn(opt: Option[string]) -> string {
+    var result: string
+    match opt {
+        Some(s) => { result = s }
+        None => { result = "" }
+    }
+    return result
+}
+
 type Route = {
     method: Method,
     path: string,
@@ -68,8 +77,15 @@ type Router = {
 let split_path: fn(string) -> List[string] =
     fn(path: string) -> List[string] {
         var working_path: string
-        if std.string.length(path) > 0 and std.string.char_at(path, 0) == '/' {
-            working_path = std.string.substring(path, 1, std.string.length(path))
+        var starts_with_slash: bool = false
+        if std.string.length(path) > 0 {
+            match std.string.char_at(path, 0) {
+                Some(c) => { starts_with_slash = c == '/' }
+                None => { starts_with_slash = false }
+            }
+        }
+        if starts_with_slash {
+            working_path = unwrap_str(std.string.substring(path, 1, std.string.length(path)))
         } else {
             working_path = path
         }
@@ -83,12 +99,12 @@ let split_path: fn(string) -> List[string] =
 
 let split_by_slash: fn(string) -> List[string] =
     fn(s: string) -> List[string] {
-        let slash_idx: Option[i32] = std.string.index_of(s, "/")
+        let slash_idx: Option[i64] = std.string.index_of(s, "/")
 
         match slash_idx {
             Some(idx) => {
-                let segment: string = std.string.substring(s, 0, idx)
-                let rest: string = std.string.substring(s, idx + 1, std.string.length(s))
+                let segment: string = unwrap_str(std.string.substring(s, 0, idx))
+                let rest: string = unwrap_str(std.string.substring(s, idx + 1, std.string.length(s)))
                 if std.string.length(rest) > 0 {
                     if std.string.length(segment) > 0 {
                         return Cons(segment, split_by_slash(rest))
@@ -163,7 +179,7 @@ let segments_match: fn(List[string], List[string]) -> bool =
                 match path_segments {
                     Nil => { result = false }
                     Cons(path_seg, path_rest) => {
-                        if std.string.length(pattern_seg) > 0 and std.string.substring(pattern_seg, 0, 1) == ":" {
+                        if std.string.length(pattern_seg) > 0 and unwrap_str(std.string.substring(pattern_seg, 0, 1)) == ":" {
                             result = segments_match(pattern_rest, path_rest)
                         } else if pattern_seg == path_seg {
                             result = segments_match(pattern_rest, path_rest)

@@ -244,7 +244,7 @@ test "NotFound status text" {
 // ============================================================================
 
 test "handler is function from request to response" {
-    let handler: Handler = fn(req: Request) -> Response {
+    let handler: fn(Request) -> Response = fn(req: Request) -> Response {
         return ok("handled: " + req.path)
     }
     let req: Request = make_request(GET, "/test")
@@ -253,7 +253,7 @@ test "handler is function from request to response" {
 }
 
 test "handler can access request method" {
-    let handler: Handler = fn(req: Request) -> Response {
+    let handler: fn(Request) -> Response = fn(req: Request) -> Response {
         var method_name: string
         match req.method {
             GET => { method_name = "GET" }
@@ -268,7 +268,7 @@ test "handler can access request method" {
 }
 
 test "handler can return different status" {
-    let handler: Handler = fn(req: Request) -> Response {
+    let handler: fn(Request) -> Response = fn(req: Request) -> Response {
         return Response {
             status: NotFound,
             headers: Nil,

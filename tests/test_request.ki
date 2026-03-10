@@ -211,14 +211,23 @@ type PathAndQuery = {
     query: List[QueryParam]
 }
 
+let unwrap_str: fn(Option[string]) -> string = fn(opt: Option[string]) -> string {
+    var result: string
+    match opt {
+        Some(s) => { result = s }
+        None => { result = "" }
+    }
+    return result
+}
+
 let extract_path_and_query: fn(string) -> PathAndQuery =
     fn(url: string) -> PathAndQuery {
-        let scheme_end: Option[i32] = std.string.index_of(url, "://")
+        let scheme_end: Option[i64] = std.string.index_of(url, "://")
         var rest: string
 
         match scheme_end {
             Some(idx) => {
-                rest = std.string.substring(url, idx + 3, std.string.length(url))
+                rest = unwrap_str(std.string.substring(url, idx + 3, std.string.length(url)))
             }
             None => {
                 rest = url
@@ -226,20 +235,20 @@ let extract_path_and_query: fn(string) -> PathAndQuery =
         }
 
         // First, find the path start (/) and query start (?) positions
-        let path_start: Option[i32] = std.string.index_of(rest, "/")
-        let query_in_rest: Option[i32] = std.string.index_of(rest, "?")
+        let path_start: Option[i64] = std.string.index_of(rest, "/")
+        let query_in_rest: Option[i64] = std.string.index_of(rest, "?")
         var path_portion: string
 
         match path_start {
             Some(idx) => {
-                path_portion = std.string.substring(rest, idx, std.string.length(rest))
+                path_portion = unwrap_str(std.string.substring(rest, idx, std.string.length(rest)))
             }
             None => {
                 // No path found - check if there's a query string directly on host
                 match query_in_rest {
                     Some(q_idx) => {
                         // Query exists without path, include it with root path
-                        path_portion = "/" + std.string.substring(rest, q_idx, std.string.length(rest))
+                        path_portion = "/" + unwrap_str(std.string.substring(rest, q_idx, std.string.length(rest)))
                     }
                     None => {
                         path_portion = "/"
@@ -248,14 +257,14 @@ let extract_path_and_query: fn(string) -> PathAndQuery =
             }
         }
 
-        let query_start: Option[i32] = std.string.index_of(path_portion, "?")
+        let query_start: Option[i64] = std.string.index_of(path_portion, "?")
         var path: string
         var query: List[QueryParam]
 
         match query_start {
             Some(idx) => {
-                path = std.string.substring(path_portion, 0, idx)
-                let query_string: string = std.string.substring(path_portion, idx + 1, std.string.length(path_portion))
+                path = unwrap_str(std.string.substring(path_portion, 0, idx))
+                let query_string: string = unwrap_str(std.string.substring(path_portion, idx + 1, std.string.length(path_portion)))
                 query = parse_query_string(query_string)
             }
             None => {
@@ -280,15 +289,15 @@ let parse_query_string: fn(string) -> List[QueryParam] =
 
 let parse_query_pairs: fn(string) -> List[QueryParam] =
     fn(query: string) -> List[QueryParam] {
-        let amp_idx: Option[i32] = std.string.index_of(query, "&")
+        let amp_idx: Option[i64] = std.string.index_of(query, "&")
 
         var current_pair: string
         var remaining: Option[string]
 
         match amp_idx {
             Some(idx) => {
-                current_pair = std.string.substring(query, 0, idx)
-                remaining = Some(std.string.substring(query, idx + 1, std.string.length(query)))
+                current_pair = unwrap_str(std.string.substring(query, 0, idx))
+                remaining = Some(unwrap_str(std.string.substring(query, idx + 1, std.string.length(query))))
             }
             None => {
                 current_pair = query
@@ -296,14 +305,14 @@ let parse_query_pairs: fn(string) -> List[QueryParam] =
             }
         }
 
-        let eq_idx: Option[i32] = std.string.index_of(current_pair, "=")
+        let eq_idx: Option[i64] = std.string.index_of(current_pair, "=")
         var param: QueryParam
 
         match eq_idx {
             Some(idx) => {
                 param = QueryParam {
-                    key: std.string.substring(current_pair, 0, idx),
-                    value: std.string.substring(current_pair, idx + 1, std.string.length(current_pair))
+                    key: unwrap_str(std.string.substring(current_pair, 0, idx)),
+                    value: unwrap_str(std.string.substring(current_pair, idx + 1, std.string.length(current_pair)))
                 }
             }
             None => {
