@@ -3,61 +3,65 @@
 /// Demonstrates creating a simple HTTP server using the kira-http library.
 /// This example shows basic routing, request handling, and response creation.
 
-use http
-use std.io
+import http.types.{Method, Status, Header, Headers, HttpError}
+import http.request.{Request, path_param}
+import http.response.{Response, ok, bad_request, json_ok}
+import http.router.{Router, Route, Handler, new_router, add_route, get, post, set_not_found}
+import http.server.{serve}
+import http.headers.{content_type}
 
 // ============================================================================
 // Handlers
 // ============================================================================
 
 /// Handles the root path - returns a welcome message
-fn handle_home(req: http.Request) -> http.Response {
-    return http.ok("Hello, World! Welcome to kira-http.")
+fn handle_home(req: Request) -> Response {
+    return ok("Hello, World! Welcome to kira-http.")
 }
 
 /// Handles the /about path
-fn handle_about(req: http.Request) -> http.Response {
+fn handle_about(req: Request) -> Response {
     let body: string = "kira-http is an HTTP library for the Kira programming language.\n\nFeatures:\n- Explicit effect tracking\n- Type-safe request/response handling\n- Middleware support\n- Path parameters"
-    return http.ok(body)
+    return ok(body)
 }
 
 /// Handles greeting with a name from path parameter
-fn handle_greet(req: http.Request) -> http.Response {
-    let name: Option[string] = http.path_param(req, "name")
+fn handle_greet(req: Request) -> Response {
+    let name: Option[string] = path_param(req, "name")
 
     match name {
         Some(n) => {
-            return http.ok("Hello, {n}!")
+            return ok("Hello, {n}!")
         }
         None => {
-            return http.bad_request("Name parameter is required")
+            return bad_request("Name parameter is required")
         }
     }
 }
 
 /// Handles echo requests - returns the request body
-fn handle_echo(req: http.Request) -> http.Response {
+fn handle_echo(req: Request) -> Response {
     match req.body {
         Some(body) => {
-            return http.ok(body)
+            return ok(body)
         }
         None => {
-            return http.bad_request("Request body is required for echo")
+            return bad_request("Request body is required for echo")
         }
     }
 }
 
 /// Handles health check endpoint
-fn handle_health(req: http.Request) -> http.Response {
-    return http.json_ok("{\"status\": \"healthy\"}")
+fn handle_health(req: Request) -> Response {
+    return json_ok("{\"status\": \"healthy\"}")
 }
 
 /// Custom 404 handler
-fn handle_not_found(req: http.Request) -> http.Response {
-    let body: string = "404 Not Found\n\nThe requested path '{req.path}' was not found.\n\nAvailable routes:\n  GET /        - Welcome message\n  GET /about   - About this server\n  GET /greet/:name - Personalized greeting\n  POST /echo   - Echo back request body\n  GET /health  - Health check"
-    return http.Response {
-        status: http.Status.NotFound,
-        headers: [http.CONTENT_TYPE_TEXT],
+fn handle_not_found(req: Request) -> Response {
+    let body: string = "404 Not Found\n\nThe requested path was not found.\n\nAvailable routes:\n  GET /        - Welcome message\n  GET /about   - About this server\n  GET /greet/:name - Personalized greeting\n  POST /echo   - Echo back request body\n  GET /health  - Health check"
+    return Response {
+        status: NotFound,
+        headers: Cons(content_type("text/plain"), Nil),
         body: body
     }
 }
@@ -72,13 +76,13 @@ effect fn main() -> IO[void] {
     std.io.println("")
 
     // Build the router with routes
-    let router: http.Router = http.new_router()
-        |> http.add_route(http.route_get("/", handle_home))
-        |> http.add_route(http.route_get("/about", handle_about))
-        |> http.add_route(http.route_get("/greet/:name", handle_greet))
-        |> http.add_route(http.route_post("/echo", handle_echo))
-        |> http.add_route(http.route_get("/health", handle_health))
-        |> http.set_not_found(handle_not_found)
+    let r0: Router = new_router()
+    let r1: Router = add_route(r0, get("/", handle_home))
+    let r2: Router = add_route(r1, get("/about", handle_about))
+    let r3: Router = add_route(r2, get("/greet/:name", handle_greet))
+    let r4: Router = add_route(r3, post("/echo", handle_echo))
+    let r5: Router = add_route(r4, get("/health", handle_health))
+    let router: Router = set_not_found(r5, handle_not_found)
 
     let port: i32 = 8080
 
@@ -94,22 +98,19 @@ effect fn main() -> IO[void] {
     std.io.println("Press Ctrl+C to stop the server.")
     std.io.println("")
 
-    let result: Result[void, http.HttpError] = http.serve(port, router)
+    let result: Result[bool, HttpError] = serve(port, router)
 
     match result {
         Ok(_) => {
             std.io.println("Server stopped.")
-            return
         }
         Err(error) => {
             match error {
-                http.HttpError.ConnectionFailed(msg) => {
+                ConnectionFailed(msg) => {
                     std.io.println("Failed to start server: {msg}")
-                    return
                 }
                 _ => {
                     std.io.println("Server error occurred")
-                    return
                 }
             }
         }
