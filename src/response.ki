@@ -7,6 +7,8 @@ module http.response
 
 import http.types.{Status, Header, Headers}
 import http.headers.{content_type}
+import json.parser.{parse}
+import json.types.{Json, JsonError}
 
 /// An HTTP response
 ///
@@ -249,6 +251,28 @@ pub let json_ok: fn(string) -> Response = fn(json_body: string) -> Response {
 pub let json_created: fn(string) -> Response = fn(json_body: string) -> Response {
     return json_response(Created, json_body)
 }
+
+/// Parses the response body as JSON
+///
+/// Uses kira-json to parse the response body string into a Json value.
+///
+/// # Arguments
+/// * `response` - The response whose body to parse
+///
+/// # Returns
+/// Ok(Json) if the body is valid JSON, Err(JsonError) otherwise
+///
+/// # Example
+/// ```
+/// effect fn fetch_user() -> Result[Json, JsonError] {
+///     let resp: Response = http.client.get("https://api.example.com/user")?
+///     return json_body(resp)
+/// }
+/// ```
+pub let json_body: fn(Response) -> Result[Json, JsonError] =
+    fn(response: Response) -> Result[Json, JsonError] {
+        return parse(response.body)
+    }
 
 /// Creates a redirect response
 ///

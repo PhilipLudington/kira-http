@@ -8,7 +8,7 @@ All source and example files have been migrated to Kira v0.12.0 `import` syntax.
 
 Reference: DESIGN.md
 
-Current status: Phase 2 complete (timeouts). Phase 3 (JSON) partially addressed via kira-json integration.
+Current status: Phase 3 complete (JSON). All planned phases are done.
 
 ## Phase 0: Core Library ✅
 
@@ -116,16 +116,25 @@ effect fn request(req: Request) -> Result[Response, HttpError] {
 
 ---
 
-## Phase 3: JSON Support
+## Phase 3: JSON Support ✅
+
+**Status:** Complete (2026-03-16)
 
 **Goal:** Add JSON serialization/deserialization helpers
 **Estimated Effort:** 3–5 days (revised: 1 day, since kira-json handles parsing/serialization)
 
+### Deliverables
+- `json_body(response) -> Result[Json, JsonError]` helper in `response.ki` for parsing response bodies as JSON
+- kira-json types documented in `lib.ki` import guide for typed decode/encode workflows
+- 8 new tests for json_body (valid objects, string/number/boolean extraction, null, arrays, error cases)
+
 ### Tasks
 - [x] Implement JSON parse/stringify — provided by kira-json dependency (`json.parser.parse`, `json.serializer.stringify`) (completed 2026-03-15)
 - [x] Add `with_json(builder, json_string)` convenience — exists in `request.ki` (completed 2026-03-14)
-- [ ] Add response helper: `json_body(response) -> Result[Json, JsonError]` using kira-json
-- [ ] Add typed decode/encode helpers or re-export kira-json types from http module
+- [x] Add response helper: `json_body(response) -> Result[Json, JsonError]` using kira-json (completed 2026-03-16)
+- [x] Document kira-json imports in `lib.ki` for typed decode/encode workflows (completed 2026-03-16)
+- [x] Add tests for `json_body` (completed 2026-03-16)
+- [x] All 322 tests passing (completed 2026-03-16)
 
 ---
 

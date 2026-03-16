@@ -2,6 +2,10 @@
 ///
 /// Tests response helper functions and correct status codes and headers.
 /// Self-contained for Kira v0.1.0 (no module system support).
+/// JSON body parsing tests use kira-json dependency.
+
+import json.parser.{parse}
+import json.types.{Json, JsonError, as_string, as_number, as_bool, is_null, get_field}
 
 // ============================================================================
 // Type Definitions
@@ -777,4 +781,127 @@ test "response chaining works" {
     }
 
     assert(is_created and has_request_id and response.body == "final body")
+}
+
+// ============================================================================
+// json_body helper
+// ============================================================================
+
+let json_body: fn(Response) -> Result[Json, JsonError] =
+    fn(response: Response) -> Result[Json, JsonError] {
+        return parse(response.body)
+    }
+
+// ============================================================================
+// Tests: json_body
+// ============================================================================
+
+test "json_body parses valid JSON object" {
+    let response: Response = json_ok("{\"name\": \"Alice\", \"age\": 30}")
+    let result: Result[Json, JsonError] = json_body(response)
+    var is_ok: bool
+    match result {
+        Ok(_) => { is_ok = true }
+        Err(_) => { is_ok = false }
+    }
+    assert(is_ok)
+}
+
+test "json_body extracts string field" {
+    let response: Response = json_ok("{\"name\": \"Alice\"}")
+    let result: Result[Json, JsonError] = json_body(response)
+    match result {
+        Ok(json) => {
+            match get_field(json, "name") {
+                Some(val) => {
+                    match as_string(val) {
+                        Some(s) => { assert(s == "Alice") }
+                        None => { assert(false, "Expected string value") }
+                    }
+                }
+                None => { assert(false, "Expected name field") }
+            }
+        }
+        Err(_) => { assert(false, "Expected valid JSON") }
+    }
+}
+
+test "json_body extracts number field" {
+    let response: Response = json_ok("{\"count\": 42}")
+    let result: Result[Json, JsonError] = json_body(response)
+    match result {
+        Ok(json) => {
+            match get_field(json, "count") {
+                Some(val) => {
+                    match as_number(val) {
+                        Some(n) => { assert(n == 42.0) }
+                        None => { assert(false, "Expected number value") }
+                    }
+                }
+                None => { assert(false, "Expected count field") }
+            }
+        }
+        Err(_) => { assert(false, "Expected valid JSON") }
+    }
+}
+
+test "json_body parses null value" {
+    let response: Response = json_ok("null")
+    let result: Result[Json, JsonError] = json_body(response)
+    match result {
+        Ok(json) => { assert(is_null(json)) }
+        Err(_) => { assert(false, "Expected valid JSON") }
+    }
+}
+
+test "json_body parses array" {
+    let response: Response = json_ok("[1, 2, 3]")
+    let result: Result[Json, JsonError] = json_body(response)
+    var is_ok: bool
+    match result {
+        Ok(_) => { is_ok = true }
+        Err(_) => { is_ok = false }
+    }
+    assert(is_ok)
+}
+
+test "json_body returns error for invalid JSON" {
+    let response: Response = ok("not valid json {{{")
+    let result: Result[Json, JsonError] = json_body(response)
+    var is_err: bool
+    match result {
+        Ok(_) => { is_err = false }
+        Err(_) => { is_err = true }
+    }
+    assert(is_err)
+}
+
+test "json_body returns error for empty body" {
+    let response: Response = ok("")
+    let result: Result[Json, JsonError] = json_body(response)
+    var is_err: bool
+    match result {
+        Ok(_) => { is_err = false }
+        Err(_) => { is_err = true }
+    }
+    assert(is_err)
+}
+
+test "json_body extracts boolean field" {
+    let response: Response = json_ok("{\"active\": true}")
+    let result: Result[Json, JsonError] = json_body(response)
+    match result {
+        Ok(json) => {
+            match get_field(json, "active") {
+                Some(val) => {
+                    match as_bool(val) {
+                        Some(b) => { assert(b == true) }
+                        None => { assert(false, "Expected bool value") }
+                    }
+                }
+                None => { assert(false, "Expected active field") }
+            }
+        }
+        Err(_) => { assert(false, "Expected valid JSON") }
+    }
 }

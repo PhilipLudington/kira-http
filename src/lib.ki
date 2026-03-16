@@ -12,7 +12,7 @@ module http
 /// ```
 /// import http.types.{Method, Status, Header, Headers, HttpError, QueryParam}
 /// import http.request.{Request, RequestBuilder, new_request, with_header, with_body, build}
-/// import http.response.{Response, ok, created, not_found, json_ok}
+/// import http.response.{Response, ok, created, not_found, json_ok, json_body}
 /// import http.router.{Router, Route, Handler, new_router, add_route, get, post}
 /// import http.middleware.{Middleware, logging, cors, timeout}
 /// import http.client.{get, post, put, delete}
@@ -20,6 +20,14 @@ module http
 /// import http.url.{Url, parse_url, build_url}
 /// import http.status.{status_code, status_from_code, is_success}
 /// import http.headers.{get_header, set_header, content_type}
+///
+/// // JSON types (from kira-json dependency)
+/// import json.types.{Json, JsonError, JsonField}
+/// import json.parser.{parse}
+/// import json.serializer.{stringify, stringify_pretty}
+/// import json.decode.{required_string, required_int, optional_string}
+/// import json.encode.{encode_string, encode_int, encode_object, encode_field}
+/// import json.builder.{builder, with_string, with_int, build}
 /// ```
 ///
 /// # Quick Start - Client
@@ -67,7 +75,7 @@ module http
 //   - http.headers   : get_header, set_header, remove_header, content_type, ...
 //   - http.url       : Url, parse_url, build_url, parse_query_string, ...
 //   - http.request   : Request, RequestBuilder, new_request, with_header, ...
-//   - http.response  : Response, ok, created, not_found, json_ok, ...
+//   - http.response  : Response, ok, created, not_found, json_ok, json_body, ...
 //   - http.router    : Router, Route, Handler, new_router, add_route, get, post, ...
 //   - http.middleware: Middleware, logging, cors, timeout, compose, ...
 //   - http.client    : get, post, put, patch, delete, send, ...
