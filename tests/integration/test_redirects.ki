@@ -1,0 +1,318 @@
+/// Integration tests for HTTP redirect following
+///
+/// These tests make real HTTP requests to httpbin.org to verify redirect
+/// behavior end-to-end. Requires network access.
+///
+/// Note: Tests that need specific redirect status codes (301, 307, 308) use
+/// httpbin.org/redirect-to with query parameters. Due to a known Kira v0.12.0
+/// issue with url_decode in the module system, these tests construct Request
+/// objects directly instead of using the builder's build() function.
+
+import http.types.{Method, Status, Header, Headers, HttpError, QueryParam}
+import http.request.{Request, RequestBuilder, new_request, with_header, with_body, with_max_redirects, build}
+import http.response.{Response}
+import http.status.{status_code}
+import http.headers.{get_header}
+import http.client.{get, send, request}
+
+// ============================================================================
+// Helper: construct a Request directly (bypasses build/url_decode)
+// ============================================================================
+
+let make_request: fn(Method, string, string, Headers, Option[string]) -> Request =
+    fn(method: Method, url: string, path: string, headers: Headers, body: Option[string]) -> Request {
+        return Request {
+            method: method,
+            url: url,
+            path: path,
+            headers: headers,
+            body: body,
+            query: Nil,
+            path_params: Nil
+        }
+    }
+
+// ============================================================================
+// Tests: Basic redirect following (relative redirect URLs)
+// ============================================================================
+
+test "follows single 302 redirect" {
+    let result: Result[Response, HttpError] = get("https://httpbin.org/redirect/1")
+    match result {
+        Ok(response) => {
+            assert(status_code(response.status) == 200, "Expected 200 after redirect")
+        }
+        Err(_) => {
+            assert(false, "Request should succeed after redirect")
+        }
+    }
+}
+
+test "follows chain of 3 redirects" {
+    let result: Result[Response, HttpError] = get("https://httpbin.org/redirect/3")
+    match result {
+        Ok(response) => {
+            assert(status_code(response.status) == 200, "Expected 200 after 3 redirects")
+        }
+        Err(_) => {
+            assert(false, "Request should succeed after 3 redirects")
+        }
+    }
+}
+
+test "follows chain of 5 redirects" {
+    let result: Result[Response, HttpError] = get("https://httpbin.org/redirect/5")
+    match result {
+        Ok(response) => {
+            assert(status_code(response.status) == 200, "Expected 200 after 5 redirects")
+        }
+        Err(_) => {
+            assert(false, "Request should succeed after 5 redirects")
+        }
+    }
+}
+
+// ============================================================================
+// Tests: Absolute redirect URLs
+// ============================================================================
+
+test "follows absolute redirect URL" {
+    let result: Result[Response, HttpError] = get("https://httpbin.org/absolute-redirect/1")
+    match result {
+        Ok(response) => {
+            assert(status_code(response.status) == 200, "Expected 200 after absolute redirect")
+        }
+        Err(_) => {
+            assert(false, "Request should succeed after absolute redirect")
+        }
+    }
+}
+
+test "follows chain of absolute redirects" {
+    let result: Result[Response, HttpError] = get("https://httpbin.org/absolute-redirect/3")
+    match result {
+        Ok(response) => {
+            assert(status_code(response.status) == 200, "Expected 200 after 3 absolute redirects")
+        }
+        Err(_) => {
+            assert(false, "Request should succeed after absolute redirect chain")
+        }
+    }
+}
+
+// ============================================================================
+// Tests: TooManyRedirects
+// ============================================================================
+
+test "returns TooManyRedirects for redirect chain exceeding default limit" {
+    let result: Result[Response, HttpError] = get("https://httpbin.org/redirect/20")
+    match result {
+        Ok(_) => {
+            assert(false, "Should have returned TooManyRedirects")
+        }
+        Err(error) => {
+            match error {
+                TooManyRedirects => {
+                    assert(true)
+                }
+                _ => {
+                    assert(false, "Expected TooManyRedirects error")
+                }
+            }
+        }
+    }
+}
+
+test "returns TooManyRedirects with custom limit of 2" {
+    let b1: RequestBuilder = new_request(GET, "https://httpbin.org/redirect/5")
+    let builder: RequestBuilder = with_max_redirects(b1, 2)
+    let result: Result[Response, HttpError] = send(builder)
+    match result {
+        Ok(_) => {
+            assert(false, "Should have returned TooManyRedirects")
+        }
+        Err(error) => {
+            match error {
+                TooManyRedirects => {
+                    assert(true)
+                }
+                _ => {
+                    assert(false, "Expected TooManyRedirects error")
+                }
+            }
+        }
+    }
+}
+
+test "max_redirects zero disables redirect following" {
+    let b1: RequestBuilder = new_request(GET, "https://httpbin.org/redirect/1")
+    let builder: RequestBuilder = with_max_redirects(b1, 0)
+    let result: Result[Response, HttpError] = send(builder)
+    match result {
+        Ok(_) => {
+            assert(false, "Should have returned TooManyRedirects with max_redirects=0")
+        }
+        Err(error) => {
+            match error {
+                TooManyRedirects => {
+                    assert(true)
+                }
+                _ => {
+                    assert(false, "Expected TooManyRedirects error")
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// Tests: Redirect with specific status codes
+// Uses direct Request construction to bypass url_decode module issue
+// ============================================================================
+
+test "follows 301 redirect" {
+    let req: Request = make_request(
+        GET,
+        "https://httpbin.org/redirect-to?url=https://httpbin.org/get&status_code=301",
+        "/redirect-to",
+        Nil,
+        None
+    )
+    let result: Result[Response, HttpError] = request(req)
+    match result {
+        Ok(response) => {
+            assert(status_code(response.status) == 200, "Expected 200 after 301 redirect")
+        }
+        Err(_) => {
+            assert(false, "Request should succeed after 301 redirect")
+        }
+    }
+}
+
+test "follows 307 redirect" {
+    let req: Request = make_request(
+        GET,
+        "https://httpbin.org/redirect-to?url=https://httpbin.org/get&status_code=307",
+        "/redirect-to",
+        Nil,
+        None
+    )
+    let result: Result[Response, HttpError] = request(req)
+    match result {
+        Ok(response) => {
+            assert(status_code(response.status) == 200, "Expected 200 after 307 redirect")
+        }
+        Err(_) => {
+            assert(false, "Request should succeed after 307 redirect")
+        }
+    }
+}
+
+test "follows 308 redirect" {
+    let req: Request = make_request(
+        GET,
+        "https://httpbin.org/redirect-to?url=https://httpbin.org/get&status_code=308",
+        "/redirect-to",
+        Nil,
+        None
+    )
+    let result: Result[Response, HttpError] = request(req)
+    match result {
+        Ok(response) => {
+            assert(status_code(response.status) == 200, "Expected 200 after 308 redirect")
+        }
+        Err(_) => {
+            assert(false, "Request should succeed after 308 redirect")
+        }
+    }
+}
+
+// ============================================================================
+// Tests: 301/302 changes method to GET
+// ============================================================================
+
+test "301 redirect changes POST to GET" {
+    let req: Request = make_request(
+        POST,
+        "https://httpbin.org/redirect-to?url=https://httpbin.org/get&status_code=301",
+        "/redirect-to",
+        Nil,
+        Some("test body")
+    )
+    let result: Result[Response, HttpError] = request(req)
+    match result {
+        Ok(response) => {
+            assert(status_code(response.status) == 200, "Expected 200 — POST should change to GET on 301")
+        }
+        Err(_) => {
+            assert(false, "Request should succeed")
+        }
+    }
+}
+
+test "302 redirect changes POST to GET" {
+    let req: Request = make_request(
+        POST,
+        "https://httpbin.org/redirect-to?url=https://httpbin.org/get&status_code=302",
+        "/redirect-to",
+        Nil,
+        Some("test body")
+    )
+    let result: Result[Response, HttpError] = request(req)
+    match result {
+        Ok(response) => {
+            assert(status_code(response.status) == 200, "Expected 200 — POST should change to GET on 302")
+        }
+        Err(_) => {
+            assert(false, "Request should succeed")
+        }
+    }
+}
+
+// ============================================================================
+// Tests: 307/308 preserves method and body
+// ============================================================================
+
+test "307 redirect preserves POST method and body" {
+    let ct: Header = Header { name: "Content-Type", value: "application/json" }
+    let req: Request = make_request(
+        POST,
+        "https://httpbin.org/redirect-to?url=https://httpbin.org/post&status_code=307",
+        "/redirect-to",
+        Cons(ct, Nil),
+        Some("{\"key\": \"value\"}")
+    )
+    let result: Result[Response, HttpError] = request(req)
+    match result {
+        Ok(response) => {
+            assert(status_code(response.status) == 200, "Expected 200 — POST should be preserved on 307")
+            let has_body: bool = std.string.contains(response.body, "key")
+            assert(has_body, "Response should contain the forwarded body")
+        }
+        Err(_) => {
+            assert(false, "Request should succeed")
+        }
+    }
+}
+
+test "308 redirect preserves POST method and body" {
+    let ct: Header = Header { name: "Content-Type", value: "application/json" }
+    let req: Request = make_request(
+        POST,
+        "https://httpbin.org/redirect-to?url=https://httpbin.org/post&status_code=308",
+        "/redirect-to",
+        Cons(ct, Nil),
+        Some("{\"preserved\": true}")
+    )
+    let result: Result[Response, HttpError] = request(req)
+    match result {
+        Ok(response) => {
+            assert(status_code(response.status) == 200, "Expected 200 — POST should be preserved on 308")
+            let has_body: bool = std.string.contains(response.body, "preserved")
+            assert(has_body, "Response should contain the forwarded body")
+        }
+        Err(_) => {
+            assert(false, "Request should succeed")
+        }
+    }
+}

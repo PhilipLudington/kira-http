@@ -26,6 +26,8 @@ pub type Status =
     | NoContent
     | MovedPermanently
     | Found
+    | TemporaryRedirect
+    | PermanentRedirect
     | NotModified
     | BadRequest
     | Unauthorized
@@ -55,6 +57,7 @@ pub type HttpError =
     | InvalidUrl(string)
     | InvalidResponse(string)
     | TlsError(string)
+    | TooManyRedirects
 
 /// A key-value pair for query parameters
 pub type QueryParam = {

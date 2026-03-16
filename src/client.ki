@@ -5,9 +5,11 @@ module http.client
 /// This module provides effectful functions for making HTTP requests.
 /// All functions that perform network IO are marked with `effect`.
 
-import http.types.{Method, HttpError, Headers}
-import http.request.{Request, RequestBuilder, build, new_request, with_body, with_header}
+import http.types.{Method, Status, Header, HttpError, Headers, QueryParam}
+import http.request.{Request, RequestBuilder, build, new_request, with_body, with_header, with_headers}
 import http.response.{Response}
+import http.headers.{get_header, set_header, remove_header}
+import http.status.{status_code}
 
 /// Performs a GET request to the given URL
 ///
@@ -128,10 +130,174 @@ pub effect fn options(url: string) -> Result[Response, HttpError] {
     return send(builder)
 }
 
+/// Resolves a redirect Location URL against the original request URL
+///
+/// If the location is absolute (starts with http:// or https://), it is
+/// returned as-is. If it is relative (e.g., "/path"), it is resolved
+/// against the scheme and host of the original URL.
+let resolve_redirect_url: fn(string, string) -> string =
+    fn(original_url: string, location: string) -> string {
+        // If location is already absolute, return as-is
+        let has_http: bool = std.string.starts_with(location, "http://")
+        let has_https: bool = std.string.starts_with(location, "https://")
+        if has_http or has_https {
+            return location
+        }
+
+        // Extract scheme + host from original URL
+        let scheme_end: Option[i64] = std.string.index_of(original_url, "://")
+        match scheme_end {
+            Some(idx) => {
+                let after_scheme: string = std.string.substring(original_url, idx + 3, std.string.length(original_url)) ?? ""
+                // Find end of host (first / after scheme)
+                let host_end: Option[i64] = std.string.index_of(after_scheme, "/")
+                var origin: string
+                match host_end {
+                    Some(hidx) => {
+                        let scheme_and_sep: string = std.string.substring(original_url, 0, idx + 3) ?? ""
+                        let host: string = std.string.substring(after_scheme, 0, hidx) ?? ""
+                        origin = scheme_and_sep + host
+                    }
+                    None => {
+                        // No path in original URL, use the whole thing as origin
+                        origin = original_url
+                    }
+                }
+
+                // If location starts with /, it's path-absolute
+                if std.string.starts_with(location, "/") {
+                    return origin + location
+                } else {
+                    return origin + "/" + location
+                }
+            }
+            None => {
+                // Shouldn't happen since we validated the original URL
+                return location
+            }
+        }
+    }
+
+/// Extracts the path portion from a URL
+let extract_path: fn(string) -> string =
+    fn(url: string) -> string {
+        let scheme_end: Option[i64] = std.string.index_of(url, "://")
+        match scheme_end {
+            Some(idx) => {
+                let after_scheme: string = std.string.substring(url, idx + 3, std.string.length(url)) ?? ""
+                let path_start: Option[i64] = std.string.index_of(after_scheme, "/")
+                match path_start {
+                    Some(pidx) => {
+                        let path_portion: string = std.string.substring(after_scheme, pidx, std.string.length(after_scheme)) ?? ""
+                        // Strip query string if present
+                        let query_start: Option[i64] = std.string.index_of(path_portion, "?")
+                        match query_start {
+                            Some(qidx) => {
+                                return std.string.substring(path_portion, 0, qidx) ?? "/"
+                            }
+                            None => {
+                                return path_portion
+                            }
+                        }
+                    }
+                    None => {
+                        return "/"
+                    }
+                }
+            }
+            None => {
+                return "/"
+            }
+        }
+    }
+
+/// Checks if a status code is a followable redirect (301, 302, 307, 308)
+let is_followable_redirect: fn(Status) -> bool = fn(status: Status) -> bool {
+    let code: i32 = status_code(status)
+    return code == 301 or code == 302 or code == 307 or code == 308
+}
+
+/// Checks if a redirect should change the method to GET (301, 302)
+let should_change_method: fn(Status) -> bool = fn(status: Status) -> bool {
+    let code: i32 = status_code(status)
+    return code == 301 or code == 302
+}
+
+/// Internal: performs an HTTP request with redirect following
+effect fn request_with_redirects(req: Request, remaining: i32) -> Result[Response, HttpError] {
+    // Validate URL before attempting connection
+    if std.string.length(req.url) == 0 {
+        return Err(InvalidUrl("Empty URL"))
+    }
+
+    let has_http: bool = std.string.starts_with(req.url, "http://")
+    let has_https: bool = std.string.starts_with(req.url, "https://")
+
+    if not has_http and not has_https {
+        return Err(InvalidUrl("URL must start with http:// or https://"))
+    }
+
+    let result: Result[Response, HttpError] = std.net.http_request(req)
+    match result {
+        Ok(response) => {
+            if is_followable_redirect(response.status) {
+                if remaining <= 0 {
+                    return Err(TooManyRedirects)
+                }
+
+                match get_header(response.headers, "location") {
+                    Some(location) => {
+                        // For 301/302: change method to GET and drop body
+                        // For 307/308: preserve method and body
+                        var new_method: Method
+                        var new_body: Option[string]
+                        if should_change_method(response.status) {
+                            new_method = GET
+                            new_body = None
+                        } else {
+                            new_method = req.method
+                            new_body = req.body
+                        }
+
+                        // Resolve relative URLs against the original request URL
+                        let resolved_url: string = resolve_redirect_url(req.url, location)
+
+                        // Extract path from resolved URL
+                        let new_path: string = extract_path(resolved_url)
+
+                        // Construct redirect request directly
+                        let new_req: Request = Request {
+                            method: new_method,
+                            url: resolved_url,
+                            path: new_path,
+                            headers: req.headers,
+                            body: new_body,
+                            query: Nil,
+                            path_params: Nil
+                        }
+                        return request_with_redirects(new_req, remaining - 1)
+                    }
+                    None => {
+                        return Ok(response)
+                    }
+                }
+            }
+            return Ok(response)
+        }
+        Err(e) => {
+            return Err(e)
+        }
+    }
+}
+
+/// Default maximum number of redirects to follow
+let DEFAULT_MAX_REDIRECTS: i32 = 10
+
 /// Performs an HTTP request using a Request object
 ///
-/// This function allows full control over the request by accepting
-/// a pre-constructed Request object.
+/// Automatically follows redirects (301, 302, 307, 308) up to a default
+/// limit of 10. For 301/302, the method is changed to GET and the body
+/// is dropped. For 307/308, the method and body are preserved.
 ///
 /// # Arguments
 /// * `req` - The Request to send
@@ -146,27 +312,14 @@ pub effect fn options(url: string) -> Result[Response, HttpError] {
 /// }
 /// ```
 pub effect fn request(req: Request) -> Result[Response, HttpError] {
-    // Validate URL before attempting connection
-    if std.string.length(req.url) == 0 {
-        return Err(InvalidUrl("Empty URL"))
-    }
-
-    // Check for valid scheme
-    let has_http: bool = std.string.starts_with(req.url, "http://")
-    let has_https: bool = std.string.starts_with(req.url, "https://")
-
-    if not has_http and not has_https {
-        return Err(InvalidUrl("URL must start with http:// or https://"))
-    }
-
-    // Perform the actual HTTP request using the runtime's network primitives
-    return std.net.http_request(req)
+    return request_with_redirects(req, DEFAULT_MAX_REDIRECTS)
 }
 
 /// Sends an HTTP request using a RequestBuilder
 ///
 /// This is the primary way to send requests when using the builder pattern.
-/// The builder is converted to a Request and sent.
+/// The builder is converted to a Request and sent. Automatically follows
+/// redirects up to the configured limit (default 10).
 ///
 /// # Arguments
 /// * `builder` - The RequestBuilder to send
@@ -185,7 +338,12 @@ pub effect fn request(req: Request) -> Result[Response, HttpError] {
 /// ```
 pub effect fn send(builder: RequestBuilder) -> Result[Response, HttpError] {
     let req: Request = build(builder)
-    return request(req)
+    var max: i32
+    match builder.max_redirects {
+        Some(n) => { max = n }
+        None => { max = DEFAULT_MAX_REDIRECTS }
+    }
+    return request_with_redirects(req, max)
 }
 
 /// Performs a POST request with JSON content

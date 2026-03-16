@@ -8,7 +8,7 @@ All source and example files have been migrated to Kira v0.12.0 `import` syntax.
 
 Reference: DESIGN.md
 
-Current status: Phase 0 complete. Phase 1 next (redirects). Phase 3 (JSON) partially addressed via kira-json integration.
+Current status: Phase 1 complete (redirects). Phase 2 next (timeouts). Phase 3 (JSON) partially addressed via kira-json integration.
 
 ## Phase 0: Core Library ✅
 
@@ -25,7 +25,9 @@ Current status: Phase 0 complete. Phase 1 next (redirects). Phase 3 (JSON) parti
 
 ---
 
-## Phase 1: HTTP Client Redirects
+## Phase 1: HTTP Client Redirects ✅
+
+**Status:** Complete (2026-03-15)
 
 **Goal:** Handle HTTP redirects (301, 302, 307, 308) automatically in the client layer
 **Estimated Effort:** 1–2 days
@@ -36,18 +38,19 @@ Current status: Phase 0 complete. Phase 1 next (redirects). Phase 3 (JSON) parti
 - Redirect-related error variant for too many redirects
 
 ### Tasks
-- [ ] Add `TooManyRedirects` variant to `HttpError` in `types.ki`
-- [ ] Add `max_redirects: Option[i32]` field to `RequestBuilder` in `request.ki`
-- [ ] Add `with_max_redirects(builder, n)` builder function in `request.ki`
-- [ ] Implement redirect logic in `client.ki`'s `request()` function:
+- [x] Add `TooManyRedirects` variant to `HttpError` in `types.ki` (completed 2026-03-15)
+- [x] Add `TemporaryRedirect` (307) and `PermanentRedirect` (308) to `Status` in `types.ki` (completed 2026-03-15)
+- [x] Add `max_redirects: Option[i32]` field to `RequestBuilder` in `request.ki` (completed 2026-03-15)
+- [x] Add `with_max_redirects(builder, n)` builder function in `request.ki` (completed 2026-03-15)
+- [x] Implement redirect logic in `client.ki`'s `request()` function (completed 2026-03-15):
   - Check if response status is 301, 302, 307, or 308
   - Extract `Location` header from response
   - Re-issue request to the new URL (preserving method for 307/308, switching to GET for 301/302)
   - Decrement redirect counter; return `Err(TooManyRedirects)` when exhausted
   - Default to 10 max redirects when `max_redirects` is `None`
 - [x] Add helper `get_header(headers, name) -> Option[string]` in `headers.ki` for case-insensitive header lookup (completed 2026-03-15)
-- [ ] Add tests for redirect chain handling
-- [ ] Test with real redirect URLs (e.g., `http://httpbin.org/redirect/3`)
+- [x] Add tests for redirect chain handling (completed 2026-03-15)
+- [x] Test with real redirect URLs via httpbin.org integration tests (completed 2026-03-15)
 
 ### Implementation Notes
 

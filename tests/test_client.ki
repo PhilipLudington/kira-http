@@ -23,17 +23,29 @@ type Header = {
 
 type Headers = List[Header]
 
+type Status =
+    | OK
+    | Created
+    | MovedPermanently
+    | Found
+    | TemporaryRedirect
+    | PermanentRedirect
+    | NotFound
+    | Custom(i32)
+
 type HttpError =
     | InvalidUrl(string)
     | ConnectionFailed(string)
     | Timeout
+    | TooManyRedirects
 
 type RequestBuilder = {
     method: Method,
     url: string,
     headers: Headers,
     body: Option[string],
-    timeout: Option[i32]
+    timeout: Option[i32],
+    max_redirects: Option[i32]
 }
 
 type Request = {
@@ -54,7 +66,8 @@ let new_request: fn(Method, string) -> RequestBuilder =
             url: url,
             headers: Nil,
             body: None,
-            timeout: None
+            timeout: None,
+            max_redirects: None
         }
     }
 
@@ -66,7 +79,8 @@ let with_header: fn(RequestBuilder, string, string) -> RequestBuilder =
             url: builder.url,
             headers: Cons(new_header, builder.headers),
             body: builder.body,
-            timeout: builder.timeout
+            timeout: builder.timeout,
+            max_redirects: builder.max_redirects
         }
     }
 
@@ -77,7 +91,8 @@ let with_body: fn(RequestBuilder, string) -> RequestBuilder =
             url: builder.url,
             headers: builder.headers,
             body: Some(body),
-            timeout: builder.timeout
+            timeout: builder.timeout,
+            max_redirects: builder.max_redirects
         }
     }
 
@@ -88,7 +103,20 @@ let with_timeout: fn(RequestBuilder, i32) -> RequestBuilder =
             url: builder.url,
             headers: builder.headers,
             body: builder.body,
-            timeout: Some(ms)
+            timeout: Some(ms),
+            max_redirects: builder.max_redirects
+        }
+    }
+
+let with_max_redirects: fn(RequestBuilder, i32) -> RequestBuilder =
+    fn(builder: RequestBuilder, n: i32) -> RequestBuilder {
+        return RequestBuilder {
+            method: builder.method,
+            url: builder.url,
+            headers: builder.headers,
+            body: builder.body,
+            timeout: builder.timeout,
+            max_redirects: Some(n)
         }
     }
 
@@ -374,4 +402,254 @@ test "chained builder preserves all" {
         None => { has_timeout = false }
     }
     assert(has_timeout)
+}
+
+// ============================================================================
+// Redirect helper functions
+// ============================================================================
+
+let status_code: fn(Status) -> i32 = fn(status: Status) -> i32 {
+    var code: i32
+    match status {
+        OK => { code = 200 }
+        Created => { code = 201 }
+        MovedPermanently => { code = 301 }
+        Found => { code = 302 }
+        TemporaryRedirect => { code = 307 }
+        PermanentRedirect => { code = 308 }
+        NotFound => { code = 404 }
+        Custom(n) => { code = n }
+    }
+    return code
+}
+
+let is_followable_redirect: fn(Status) -> bool = fn(status: Status) -> bool {
+    let code: i32 = status_code(status)
+    return code == 301 or code == 302 or code == 307 or code == 308
+}
+
+let should_change_method: fn(Status) -> bool = fn(status: Status) -> bool {
+    let code: i32 = status_code(status)
+    return code == 301 or code == 302
+}
+
+// ============================================================================
+// Tests: with_max_redirects
+// ============================================================================
+
+test "with_max_redirects sets max_redirects" {
+    let b1: RequestBuilder = new_request(GET, "https://example.com")
+    let builder: RequestBuilder = with_max_redirects(b1, 5)
+    var has_max: bool
+    match builder.max_redirects {
+        Some(n) => { has_max = n == 5 }
+        None => { has_max = false }
+    }
+    assert(has_max)
+}
+
+test "with_max_redirects replaces max_redirects" {
+    let b1: RequestBuilder = new_request(GET, "https://example.com")
+    let b2: RequestBuilder = with_max_redirects(b1, 5)
+    let builder: RequestBuilder = with_max_redirects(b2, 3)
+    var has_max: bool
+    match builder.max_redirects {
+        Some(n) => { has_max = n == 3 }
+        None => { has_max = false }
+    }
+    assert(has_max)
+}
+
+test "new_request has no max_redirects" {
+    let builder: RequestBuilder = new_request(GET, "https://example.com")
+    var has_no_max: bool
+    match builder.max_redirects {
+        None => { has_no_max = true }
+        Some(_) => { has_no_max = false }
+    }
+    assert(has_no_max)
+}
+
+test "with_max_redirects zero disables redirects" {
+    let b1: RequestBuilder = new_request(GET, "https://example.com")
+    let builder: RequestBuilder = with_max_redirects(b1, 0)
+    var has_max: bool
+    match builder.max_redirects {
+        Some(n) => { has_max = n == 0 }
+        None => { has_max = false }
+    }
+    assert(has_max)
+}
+
+test "with_max_redirects preserves other fields" {
+    let b1: RequestBuilder = new_request(POST, "https://example.com")
+    let b2: RequestBuilder = with_header(b1, "Accept", "application/json")
+    let b3: RequestBuilder = with_body(b2, "test body")
+    let builder: RequestBuilder = with_max_redirects(b3, 5)
+    assert(methods_equal(builder.method, POST))
+    assert(builder.url == "https://example.com")
+    assert(has_header(builder.headers, "Accept"))
+    var has_body: bool
+    match builder.body {
+        Some(b) => { has_body = b == "test body" }
+        None => { has_body = false }
+    }
+    assert(has_body)
+}
+
+// ============================================================================
+// Tests: Redirect status detection
+// ============================================================================
+
+test "is_followable_redirect true for 301" {
+    assert(is_followable_redirect(MovedPermanently) == true)
+}
+
+test "is_followable_redirect true for 302" {
+    assert(is_followable_redirect(Found) == true)
+}
+
+test "is_followable_redirect true for 307" {
+    assert(is_followable_redirect(TemporaryRedirect) == true)
+}
+
+test "is_followable_redirect true for 308" {
+    assert(is_followable_redirect(PermanentRedirect) == true)
+}
+
+test "is_followable_redirect false for 200" {
+    assert(is_followable_redirect(OK) == false)
+}
+
+test "is_followable_redirect false for 404" {
+    assert(is_followable_redirect(NotFound) == false)
+}
+
+// ============================================================================
+// Tests: Method change on redirect
+// ============================================================================
+
+test "should_change_method true for 301" {
+    assert(should_change_method(MovedPermanently) == true)
+}
+
+test "should_change_method true for 302" {
+    assert(should_change_method(Found) == true)
+}
+
+test "should_change_method false for 307" {
+    assert(should_change_method(TemporaryRedirect) == false)
+}
+
+test "should_change_method false for 308" {
+    assert(should_change_method(PermanentRedirect) == false)
+}
+
+// ============================================================================
+// Redirect URL resolution
+// ============================================================================
+
+let resolve_redirect_url: fn(string, string) -> string =
+    fn(original_url: string, location: string) -> string {
+        let has_http: bool = std.string.starts_with(location, "http://")
+        let has_https: bool = std.string.starts_with(location, "https://")
+        if has_http or has_https {
+            return location
+        }
+
+        let scheme_end: Option[i64] = std.string.index_of(original_url, "://")
+        match scheme_end {
+            Some(idx) => {
+                let after_scheme: string = std.string.substring(original_url, idx + 3, std.string.length(original_url)) ?? ""
+                let host_end: Option[i64] = std.string.index_of(after_scheme, "/")
+                var origin: string
+                match host_end {
+                    Some(hidx) => {
+                        let scheme_and_sep: string = std.string.substring(original_url, 0, idx + 3) ?? ""
+                        let host: string = std.string.substring(after_scheme, 0, hidx) ?? ""
+                        origin = scheme_and_sep + host
+                    }
+                    None => {
+                        origin = original_url
+                    }
+                }
+
+                if std.string.starts_with(location, "/") {
+                    return origin + location
+                } else {
+                    return origin + "/" + location
+                }
+            }
+            None => {
+                return location
+            }
+        }
+    }
+
+// ============================================================================
+// Tests: Redirect URL resolution
+// ============================================================================
+
+test "resolve_redirect_url returns absolute URL as-is" {
+    let result: string = resolve_redirect_url(
+        "https://example.com/old",
+        "https://other.com/new"
+    )
+    assert(result == "https://other.com/new")
+}
+
+test "resolve_redirect_url resolves relative path against origin" {
+    let result: string = resolve_redirect_url(
+        "https://example.com/old/path",
+        "/new/path"
+    )
+    assert(result == "https://example.com/new/path")
+}
+
+test "resolve_redirect_url resolves root path" {
+    let result: string = resolve_redirect_url(
+        "https://example.com/some/deep/path",
+        "/"
+    )
+    assert(result == "https://example.com/")
+}
+
+test "resolve_redirect_url handles http scheme" {
+    let result: string = resolve_redirect_url(
+        "http://example.com/old",
+        "/new"
+    )
+    assert(result == "http://example.com/new")
+}
+
+test "resolve_redirect_url handles port in origin" {
+    let result: string = resolve_redirect_url(
+        "https://example.com:8080/old",
+        "/new"
+    )
+    assert(result == "https://example.com:8080/new")
+}
+
+test "resolve_redirect_url handles origin without path" {
+    let result: string = resolve_redirect_url(
+        "https://example.com",
+        "/new"
+    )
+    assert(result == "https://example.com/new")
+}
+
+test "resolve_redirect_url handles relative path without leading slash" {
+    let result: string = resolve_redirect_url(
+        "https://example.com/old",
+        "new"
+    )
+    assert(result == "https://example.com/new")
+}
+
+test "resolve_redirect_url preserves http absolute URL" {
+    let result: string = resolve_redirect_url(
+        "https://example.com/old",
+        "http://other.com/path"
+    )
+    assert(result == "http://other.com/path")
 }

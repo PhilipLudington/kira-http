@@ -23,6 +23,8 @@ pub let status_code: fn(Status) -> i32 = fn(status: Status) -> i32 {
         NoContent => { code = 204 }
         MovedPermanently => { code = 301 }
         Found => { code = 302 }
+        TemporaryRedirect => { code = 307 }
+        PermanentRedirect => { code = 308 }
         NotModified => { code = 304 }
         BadRequest => { code = 400 }
         Unauthorized => { code = 401 }
@@ -55,6 +57,8 @@ pub let status_from_code: fn(i32) -> Status = fn(code: i32) -> Status {
         204 => { result = NoContent }
         301 => { result = MovedPermanently }
         302 => { result = Found }
+        307 => { result = TemporaryRedirect }
+        308 => { result = PermanentRedirect }
         304 => { result = NotModified }
         400 => { result = BadRequest }
         401 => { result = Unauthorized }

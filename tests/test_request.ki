@@ -44,7 +44,8 @@ type RequestBuilder = {
     url: string,
     headers: Headers,
     body: Option[string],
-    timeout: Option[i32]
+    timeout: Option[i32],
+    max_redirects: Option[i32]
 }
 
 // ============================================================================
@@ -124,7 +125,8 @@ let new_request: fn(Method, string) -> RequestBuilder =
             url: url,
             headers: Nil,
             body: None,
-            timeout: None
+            timeout: None,
+            max_redirects: None
         }
     }
 
@@ -135,7 +137,8 @@ let with_header: fn(RequestBuilder, string, string) -> RequestBuilder =
             url: builder.url,
             headers: set_header(builder.headers, name, value),
             body: builder.body,
-            timeout: builder.timeout
+            timeout: builder.timeout,
+            max_redirects: builder.max_redirects
         }
     }
 
@@ -147,7 +150,8 @@ let with_headers: fn(RequestBuilder, Headers) -> RequestBuilder =
             url: builder.url,
             headers: merged,
             body: builder.body,
-            timeout: builder.timeout
+            timeout: builder.timeout,
+            max_redirects: builder.max_redirects
         }
     }
 
@@ -171,7 +175,8 @@ let with_body: fn(RequestBuilder, string) -> RequestBuilder =
             url: builder.url,
             headers: builder.headers,
             body: Some(body),
-            timeout: builder.timeout
+            timeout: builder.timeout,
+            max_redirects: builder.max_redirects
         }
     }
 
@@ -188,7 +193,8 @@ let with_timeout: fn(RequestBuilder, i32) -> RequestBuilder =
             url: builder.url,
             headers: builder.headers,
             body: builder.body,
-            timeout: Some(ms)
+            timeout: Some(ms),
+            max_redirects: builder.max_redirects
         }
     }
 

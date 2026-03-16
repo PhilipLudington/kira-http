@@ -14,6 +14,8 @@ type Status =
     | NoContent
     | MovedPermanently
     | Found
+    | TemporaryRedirect
+    | PermanentRedirect
     | NotModified
     | BadRequest
     | Unauthorized
@@ -47,6 +49,8 @@ let status_code: fn(Status) -> i32 = fn(status: Status) -> i32 {
         NoContent => { code = 204 }
         MovedPermanently => { code = 301 }
         Found => { code = 302 }
+        TemporaryRedirect => { code = 307 }
+        PermanentRedirect => { code = 308 }
         NotModified => { code = 304 }
         BadRequest => { code = 400 }
         Unauthorized => { code = 401 }
@@ -72,6 +76,8 @@ let status_from_code: fn(i32) -> Status = fn(code: i32) -> Status {
         204 => { status = NoContent }
         301 => { status = MovedPermanently }
         302 => { status = Found }
+        307 => { status = TemporaryRedirect }
+        308 => { status = PermanentRedirect }
         304 => { status = NotModified }
         400 => { status = BadRequest }
         401 => { status = Unauthorized }
@@ -251,6 +257,40 @@ test "status_code returns 503 for ServiceUnavailable" {
 
 test "status_code returns custom value for Custom" {
     assert(status_code(Custom(418)) == 418)
+}
+
+test "status_code returns 307 for TemporaryRedirect" {
+    assert(status_code(TemporaryRedirect) == 307)
+}
+
+test "status_code returns 308 for PermanentRedirect" {
+    assert(status_code(PermanentRedirect) == 308)
+}
+
+test "status_from_code 307 returns TemporaryRedirect" {
+    var matches: bool
+    match status_from_code(307) {
+        TemporaryRedirect => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+}
+
+test "status_from_code 308 returns PermanentRedirect" {
+    var matches: bool
+    match status_from_code(308) {
+        PermanentRedirect => { matches = true }
+        _ => { matches = false }
+    }
+    assert(matches)
+}
+
+test "is_redirect true for TemporaryRedirect" {
+    assert(is_redirect(TemporaryRedirect) == true)
+}
+
+test "is_redirect true for PermanentRedirect" {
+    assert(is_redirect(PermanentRedirect) == true)
 }
 
 // ============================================================================

@@ -31,7 +31,8 @@ pub type RequestBuilder = {
     url: string,
     headers: Headers,
     body: Option[string],
-    timeout: Option[i32]
+    timeout: Option[i32],
+    max_redirects: Option[i32]
 }
 
 /// Creates a new request builder with the given method and URL
@@ -54,7 +55,8 @@ pub let new_request: fn(Method, string) -> RequestBuilder =
             url: url,
             headers: Nil,
             body: None,
-            timeout: None
+            timeout: None,
+            max_redirects: None
         }
     }
 
@@ -82,7 +84,8 @@ pub let with_header: fn(RequestBuilder, string, string) -> RequestBuilder =
             url: builder.url,
             headers: set_header(builder.headers, name, value),
             body: builder.body,
-            timeout: builder.timeout
+            timeout: builder.timeout,
+            max_redirects: builder.max_redirects
         }
     }
 
@@ -104,7 +107,8 @@ pub let with_headers: fn(RequestBuilder, Headers) -> RequestBuilder =
             url: builder.url,
             headers: merged,
             body: builder.body,
-            timeout: builder.timeout
+            timeout: builder.timeout,
+            max_redirects: builder.max_redirects
         }
     }
 
@@ -136,7 +140,8 @@ pub let with_body: fn(RequestBuilder, string) -> RequestBuilder =
             url: builder.url,
             headers: builder.headers,
             body: Some(body),
-            timeout: builder.timeout
+            timeout: builder.timeout,
+            max_redirects: builder.max_redirects
         }
     }
 
@@ -184,7 +189,37 @@ pub let with_timeout: fn(RequestBuilder, i32) -> RequestBuilder =
             url: builder.url,
             headers: builder.headers,
             body: builder.body,
-            timeout: Some(ms)
+            timeout: Some(ms),
+            max_redirects: builder.max_redirects
+        }
+    }
+
+/// Sets the maximum number of redirects to follow
+///
+/// When set, the HTTP client will automatically follow redirect responses
+/// (301, 302, 307, 308) up to this limit. Default is 10 when not set.
+///
+/// # Arguments
+/// * `builder` - The request builder
+/// * `n` - The maximum number of redirects to follow
+///
+/// # Returns
+/// A new RequestBuilder with the max redirects set
+///
+/// # Example
+/// ```
+/// let builder: RequestBuilder = new_request(GET, url)
+///     |> with_max_redirects(5)
+/// ```
+pub let with_max_redirects: fn(RequestBuilder, i32) -> RequestBuilder =
+    fn(builder: RequestBuilder, n: i32) -> RequestBuilder {
+        return RequestBuilder {
+            method: builder.method,
+            url: builder.url,
+            headers: builder.headers,
+            body: builder.body,
+            timeout: builder.timeout,
+            max_redirects: Some(n)
         }
     }
 
