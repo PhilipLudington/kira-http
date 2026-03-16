@@ -52,7 +52,8 @@ type Request = {
     method: Method,
     url: string,
     headers: Headers,
-    body: Option[string]
+    body: Option[string],
+    timeout: Option[i32]
 }
 
 // ============================================================================
@@ -126,7 +127,8 @@ let build: fn(RequestBuilder) -> Request =
             method: builder.method,
             url: builder.url,
             headers: builder.headers,
-            body: builder.body
+            body: builder.body,
+            timeout: builder.timeout
         }
     }
 
@@ -347,6 +349,29 @@ test "build preserves body" {
         None => { has_body = false }
     }
     assert(has_body)
+}
+
+test "build preserves timeout" {
+    let b1: RequestBuilder = new_request(GET, "https://example.com")
+    let builder: RequestBuilder = with_timeout(b1, 5000)
+    let request: Request = build(builder)
+    var has_timeout: bool
+    match request.timeout {
+        Some(t) => { has_timeout = t == 5000 }
+        None => { has_timeout = false }
+    }
+    assert(has_timeout)
+}
+
+test "build has no timeout by default" {
+    let b1: RequestBuilder = new_request(GET, "https://example.com")
+    let request: Request = build(b1)
+    var has_no_timeout: bool
+    match request.timeout {
+        None => { has_no_timeout = true }
+        Some(_) => { has_no_timeout = false }
+    }
+    assert(has_no_timeout)
 }
 
 // ============================================================================

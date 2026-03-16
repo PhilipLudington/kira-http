@@ -39,7 +39,8 @@ type Request = {
     headers: Headers,
     body: Option[string],
     query: List[QueryParam],
-    path_params: List[QueryParam]
+    path_params: List[QueryParam],
+    timeout: Option[i32]
 }
 
 type Response = {

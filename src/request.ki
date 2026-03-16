@@ -19,7 +19,8 @@ pub type Request = {
     headers: Headers,
     body: Option[string],
     query: List[QueryParam],
-    path_params: List[QueryParam]
+    path_params: List[QueryParam],
+    timeout: Option[i32]
 }
 
 /// A builder for constructing HTTP requests
@@ -242,7 +243,8 @@ pub let build: fn(RequestBuilder) -> Request =
             headers: builder.headers,
             body: builder.body,
             query: path_and_query.query,
-            path_params: Nil
+            path_params: Nil,
+            timeout: builder.timeout
         }
     }
 
@@ -416,6 +418,7 @@ pub let with_path_params: fn(Request, List[QueryParam]) -> Request =
             headers: request.headers,
             body: request.body,
             query: request.query,
-            path_params: params
+            path_params: params,
+            timeout: request.timeout
         }
     }

@@ -28,7 +28,8 @@ let make_request: fn(Method, string, string, Headers, Option[string]) -> Request
             headers: headers,
             body: body,
             query: Nil,
-            path_params: Nil
+            path_params: Nil,
+            timeout: None
         }
     }
 

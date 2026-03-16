@@ -8,7 +8,7 @@ All source and example files have been migrated to Kira v0.12.0 `import` syntax.
 
 Reference: DESIGN.md
 
-Current status: Phase 1 complete (redirects). Phase 2 next (timeouts). Phase 3 (JSON) partially addressed via kira-json integration.
+Current status: Phase 2 complete (timeouts). Phase 3 (JSON) partially addressed via kira-json integration.
 
 ## Phase 0: Core Library ✅
 
@@ -87,14 +87,32 @@ effect fn request(req: Request) -> Result[Response, HttpError] {
 
 ---
 
-## Phase 2: Request Timeouts
+## Phase 2: Request Timeouts ✅
+
+**Status:** Complete (2026-03-16)
 
 **Goal:** Honor the `timeout` field in `RequestBuilder`
 **Estimated Effort:** 1 day
 
+### Deliverables
+- `timeout: Option[i32]` field added to `Request` type, passed through from `RequestBuilder`
+- Kira runtime (`std.net.http_request`) reads timeout from request record and applies it as socket read timeout
+- Default timeout remains 30s when not specified; configurable via `with_timeout(builder, ms)`
+- Timeout preserved across redirect chains
+- Fixed non-exhaustive match patterns in `server.ki` for `TemporaryRedirect`, `PermanentRedirect`, `TooManyRedirects`
+
 ### Tasks
-- [ ] Pass timeout from `RequestBuilder` through to `std.net.http_request` (requires runtime support)
-- [ ] Or implement timeout at the kira-http layer using a timer mechanism
+- [x] Add `timeout: Option[i32]` field to `Request` type in `request.ki` (completed 2026-03-16)
+- [x] Update `build()` to pass `builder.timeout` through to `Request` (completed 2026-03-16)
+- [x] Update `with_path_params()` to preserve timeout (completed 2026-03-16)
+- [x] Update redirect request construction in `client.ki` to preserve timeout (completed 2026-03-16)
+- [x] Update server-side `Request` construction in `server.ki` with `timeout: None` (completed 2026-03-16)
+- [x] Modify Kira runtime `std.net.http_request` to read `timeout` field from request record (completed 2026-03-16)
+- [x] Add 307/308 status codes to runtime `statusCodeToVariant` (completed 2026-03-16)
+- [x] Fix non-exhaustive match patterns in `server.ki` (completed 2026-03-16)
+- [x] Update all test files with new `Request` type and constructions (completed 2026-03-16)
+- [x] Add tests for timeout pass-through in `build()` (completed 2026-03-16)
+- [x] All 314 tests passing (completed 2026-03-16)
 
 ---
 

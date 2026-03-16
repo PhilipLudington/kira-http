@@ -42,7 +42,8 @@ type Request = {
     path: string,
     headers: Headers,
     body: Option[string],
-    query: List[QueryParam]
+    query: List[QueryParam],
+    timeout: Option[i32]
 }
 
 type Response = {
@@ -73,7 +74,8 @@ let make_request: fn(Method, string) -> Request =
             path: path,
             headers: Nil,
             body: None,
-            query: Nil
+            query: Nil,
+            timeout: None
         }
     }
 

@@ -26,7 +26,8 @@ type Request = {
     url: string,
     path: string,
     headers: Headers,
-    body: Option[string]
+    body: Option[string],
+    timeout: Option[i32]
 }
 
 type Response = {
@@ -50,7 +51,8 @@ let make_request: fn(string) -> Request = fn(path: string) -> Request {
         url: "http://localhost" + path,
         path: path,
         headers: Nil,
-        body: None
+        body: None,
+        timeout: None
     }
 }
 

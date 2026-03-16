@@ -223,7 +223,8 @@ pub let parse_http_request: fn(string) -> Result[Request, HttpError] =
             headers: headers_and_body.headers,
             body: headers_and_body.body,
             query: path_and_query.query,
-            path_params: Nil
+            path_params: Nil,
+            timeout: None
         })
     }
 
@@ -420,6 +421,8 @@ let status_reason: fn(Status) -> string =
             NoContent => { reason = "No Content" }
             MovedPermanently => { reason = "Moved Permanently" }
             Found => { reason = "Found" }
+            TemporaryRedirect => { reason = "Temporary Redirect" }
+            PermanentRedirect => { reason = "Permanent Redirect" }
             NotModified => { reason = "Not Modified" }
             BadRequest => { reason = "Bad Request" }
             Unauthorized => { reason = "Unauthorized" }
@@ -445,6 +448,7 @@ let http_error_to_string: fn(HttpError) -> string =
             InvalidUrl(msg) => { result = "Invalid URL: ${msg}" }
             InvalidResponse(msg) => { result = "Invalid response: ${msg}" }
             TlsError(msg) => { result = "TLS error: ${msg}" }
+            TooManyRedirects => { result = "Too many redirects" }
         }
         return result
     }

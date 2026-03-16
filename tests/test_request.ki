@@ -36,7 +36,8 @@ type Request = {
     headers: Headers,
     body: Option[string],
     query: List[QueryParam],
-    path_params: List[QueryParam]
+    path_params: List[QueryParam],
+    timeout: Option[i32]
 }
 
 type RequestBuilder = {
@@ -208,7 +209,8 @@ let build: fn(RequestBuilder) -> Request =
             headers: builder.headers,
             body: builder.body,
             query: path_and_query.query,
-            path_params: Nil
+            path_params: Nil,
+            timeout: builder.timeout
         }
     }
 
@@ -400,7 +402,8 @@ let with_path_params: fn(Request, List[QueryParam]) -> Request =
             headers: request.headers,
             body: request.body,
             query: request.query,
-            path_params: params
+            path_params: params,
+            timeout: request.timeout
         }
     }
 
@@ -727,6 +730,31 @@ test "build defaults path to /" {
     let request: Request = build(b1)
 
     assert(request.path == "/")
+}
+
+test "build preserves timeout" {
+    let b1: RequestBuilder = new_request(GET, "https://example.com")
+    let b2: RequestBuilder = with_timeout(b1, 3000)
+    let request: Request = build(b2)
+
+    var has_timeout: bool
+    match request.timeout {
+        Some(t) => { has_timeout = t == 3000 }
+        None => { has_timeout = false }
+    }
+    assert(has_timeout)
+}
+
+test "build has no timeout by default" {
+    let b1: RequestBuilder = new_request(GET, "https://example.com")
+    let request: Request = build(b1)
+
+    var has_no_timeout: bool
+    match request.timeout {
+        None => { has_no_timeout = true }
+        Some(_) => { has_no_timeout = false }
+    }
+    assert(has_no_timeout)
 }
 
 // ============================================================================

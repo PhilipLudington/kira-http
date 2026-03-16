@@ -273,7 +273,8 @@ effect fn request_with_redirects(req: Request, remaining: i32) -> Result[Respons
                             headers: req.headers,
                             body: new_body,
                             query: Nil,
-                            path_params: Nil
+                            path_params: Nil,
+                            timeout: req.timeout
                         }
                         return request_with_redirects(new_req, remaining - 1)
                     }
