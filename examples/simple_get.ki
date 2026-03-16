@@ -60,6 +60,9 @@ effect fn fetch_and_print(url: string) -> IO[void] {
                 TlsError(msg) => {
                     std.io.println("TLS error: ${msg}")
                 }
+                TooManyRedirects => {
+                    std.io.println("Too many redirects")
+                }
             }
         }
     }

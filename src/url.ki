@@ -516,26 +516,26 @@ let decode_chars: fn(string, i64, i64, string) -> string =
             var hex2: char
             match hex1_opt {
                 Some(c) => { hex1 = c }
-                None => { return decode_chars(s, pos + 1, len, result + std.char.to_string(ch)) }
+                None => { return decode_chars(s, pos + 1, len, result + std.string.from_char(ch)) }
             }
             match hex2_opt {
                 Some(c) => { hex2 = c }
-                None => { return decode_chars(s, pos + 1, len, result + std.char.to_string(ch)) }
+                None => { return decode_chars(s, pos + 1, len, result + std.string.from_char(ch)) }
             }
             let decoded_char: Option[char] = decode_hex_pair(hex1, hex2)
             match decoded_char {
                 Some(decoded) => {
-                    return decode_chars(s, pos + 3, len, result + std.char.to_string(decoded))
+                    return decode_chars(s, pos + 3, len, result + std.string.from_char(decoded))
                 }
                 None => {
                     // Invalid hex sequence, keep as-is
-                    return decode_chars(s, pos + 1, len, result + std.char.to_string(ch))
+                    return decode_chars(s, pos + 1, len, result + std.string.from_char(ch))
                 }
             }
         }
 
         // Regular character
-        return decode_chars(s, pos + 1, len, result + std.char.to_string(ch))
+        return decode_chars(s, pos + 1, len, result + std.string.from_char(ch))
     }
 
 let decode_hex_pair: fn(char, char) -> Option[char] =
