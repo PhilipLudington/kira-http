@@ -110,15 +110,9 @@ pub let with_headers: fn(RequestBuilder, Headers) -> RequestBuilder =
 
 let merge_headers: fn(Headers, Headers) -> Headers =
     fn(existing: Headers, new_headers: Headers) -> Headers {
-        var result: Headers
-        match new_headers {
-            Nil => { result = existing }
-            Cons(header, rest) => {
-                let updated: Headers = set_header(existing, header.name, header.value)
-                result = merge_headers(updated, rest)
-            }
-        }
-        return result
+        return std.list.fold(new_headers, existing, fn(acc: Headers, h: Header) -> Headers {
+            return set_header(acc, h.name, h.value)
+        })
     }
 
 /// Sets the body of the request

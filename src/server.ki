@@ -51,7 +51,7 @@ pub effect fn serve(port: i32, router: Router) -> Result[bool, HttpError] {
         Err(e) => { return Err(ConnectionFailed(e)) }
     }
 
-    std.io.println("Server listening on port " + std.string.from_int(port))
+    std.io.println("Server listening on port ${port}")
 
     // Accept and handle connections in a loop
     loop {
@@ -64,13 +64,13 @@ pub effect fn serve(port: i32, router: Router) -> Result[bool, HttpError] {
                     Ok(_) => { }
                     Err(e) => {
                         // Log error but continue accepting connections
-                        std.io.eprintln("Error handling connection: " + http_error_to_string(e))
+                        std.io.eprintln("Error handling connection: ${http_error_to_string(e)}")
                     }
                 }
             }
             Err(e) => {
                 // Log error but continue accepting connections
-                std.io.eprintln("Error accepting connection: " + e)
+                std.io.eprintln("Error accepting connection: ${e}")
             }
         }
     }
@@ -113,7 +113,7 @@ effect fn handle_connection(conn: TcpConnection, router: Router) -> Result[bool,
     var raw_request: string
     match raw_request_result {
         Ok(data) => { raw_request = data }
-        Err(e) => { return Err(InvalidResponse("Failed to read request: " + e)) }
+        Err(e) => { return Err(InvalidResponse("Failed to read request: ${e}")) }
     }
 
     // Parse the HTTP request
@@ -127,7 +127,7 @@ effect fn handle_connection(conn: TcpConnection, router: Router) -> Result[bool,
             let error_response: string = serialize_http_response(Response {
                 status: BadRequest,
                 headers: Nil,
-                body: "Bad Request: " + http_error_to_string(e)
+                body: "Bad Request: ${http_error_to_string(e)}"
             })
             let write_result: Result[bool, string] = std.net.write(conn, error_response)
             let close_result: Result[bool, string] = std.net.close(conn)
@@ -199,7 +199,7 @@ pub let parse_http_request: fn(string) -> Result[Request, HttpError] =
                 path_with_query = p
                 version = v
             }
-            _ => { return Err(InvalidResponse("Invalid request line: " + request_line)) }
+            _ => { return Err(InvalidResponse("Invalid request line: ${request_line}")) }
         }
 
         // Parse method
@@ -296,7 +296,7 @@ let parse_headers_and_body: fn(List[string]) -> HeadersBodyResult =
         }
 
         // Join body lines
-        if list_length(body_lines) > 0 {
+        if std.list.length(body_lines) > 0 {
             body = Some(join_strings(body_lines, "\r\n"))
         }
 
@@ -352,7 +352,7 @@ let parse_method: fn(string) -> Result[Method, HttpError] =
             "PATCH" => { result = Ok(PATCH) }
             "HEAD" => { result = Ok(HEAD) }
             "OPTIONS" => { result = Ok(OPTIONS) }
-            _ => { result = Err(InvalidResponse("Unknown method: " + method_str)) }
+            _ => { result = Err(InvalidResponse("Unknown method: ${method_str}")) }
         }
         return result
     }
@@ -377,11 +377,11 @@ pub let serialize_http_response: fn(Response) -> string =
         let reason: string = status_reason(response.status)
 
         // Status line
-        var result: string = "HTTP/1.1 " + std.string.from_int(code) + " " + reason + "\r\n"
+        var result: string = "HTTP/1.1 ${code} ${reason}\r\n"
 
         // Add Content-Length header
-        let body_length: i32 = std.string.length(response.body)
-        result = result + "Content-Length: " + std.string.from_int(body_length) + "\r\n"
+        let body_length: i64 = std.string.length(response.body)
+        result = result + "Content-Length: ${body_length}\r\n"
 
         // Add headers
         result = result + serialize_headers(response.headers)
@@ -401,7 +401,7 @@ let serialize_headers: fn(Headers) -> string =
             match current {
                 Nil => { break }
                 Cons(header, rest) => {
-                    result = result + header.name + ": " + header.value + "\r\n"
+                    result = result + "${header.name}: ${header.value}\r\n"
                     current = rest
                 }
             }
@@ -440,11 +440,11 @@ let http_error_to_string: fn(HttpError) -> string =
     fn(err: HttpError) -> string {
         var result: string
         match err {
-            ConnectionFailed(msg) => { result = "Connection failed: " + msg }
+            ConnectionFailed(msg) => { result = "Connection failed: ${msg}" }
             Timeout => { result = "Request timed out" }
-            InvalidUrl(msg) => { result = "Invalid URL: " + msg }
-            InvalidResponse(msg) => { result = "Invalid response: " + msg }
-            TlsError(msg) => { result = "TLS error: " + msg }
+            InvalidUrl(msg) => { result = "Invalid URL: ${msg}" }
+            InvalidResponse(msg) => { result = "Invalid response: ${msg}" }
+            TlsError(msg) => { result = "TLS error: ${msg}" }
         }
         return result
     }
@@ -467,21 +467,6 @@ let append_string: fn(List[string], string) -> List[string] =
         return result
     }
 
-let list_length: fn(List[string]) -> i32 =
-    fn(list: List[string]) -> i32 {
-        var count: i32 = 0
-        var current: List[string] = list
-        loop {
-            match current {
-                Nil => { break }
-                Cons(_, rest) => {
-                    count = count + 1
-                    current = rest
-                }
-            }
-        }
-        return count
-    }
 
 let join_strings: fn(List[string], string) -> string =
     fn(strings: List[string], separator: string) -> string {

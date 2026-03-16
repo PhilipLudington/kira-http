@@ -31,7 +31,7 @@ fn handle_greet(req: Request) -> Response {
 
     match name {
         Some(n) => {
-            return ok("Hello, {n}!")
+            return ok("Hello, ${n}!")
         }
         None => {
             return bad_request("Name parameter is required")
@@ -86,14 +86,14 @@ effect fn main() -> IO[void] {
 
     let port: i32 = 8080
 
-    std.io.println("Server starting on port {port}...")
+    std.io.println("Server starting on port ${port}...")
     std.io.println("")
     std.io.println("Available routes:")
-    std.io.println("  GET  http://localhost:{port}/")
-    std.io.println("  GET  http://localhost:{port}/about")
-    std.io.println("  GET  http://localhost:{port}/greet/:name")
-    std.io.println("  POST http://localhost:{port}/echo")
-    std.io.println("  GET  http://localhost:{port}/health")
+    std.io.println("  GET  http://localhost:${port}/")
+    std.io.println("  GET  http://localhost:${port}/about")
+    std.io.println("  GET  http://localhost:${port}/greet/:name")
+    std.io.println("  POST http://localhost:${port}/echo")
+    std.io.println("  GET  http://localhost:${port}/health")
     std.io.println("")
     std.io.println("Press Ctrl+C to stop the server.")
     std.io.println("")
@@ -107,7 +107,7 @@ effect fn main() -> IO[void] {
         Err(error) => {
             match error {
                 ConnectionFailed(msg) => {
-                    std.io.println("Failed to start server: {msg}")
+                    std.io.println("Failed to start server: ${msg}")
                 }
                 _ => {
                     std.io.println("Server error occurred")

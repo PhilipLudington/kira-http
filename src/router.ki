@@ -465,24 +465,9 @@ let is_param_segment: fn(string) -> bool =
 let split_path: fn(string) -> List[string] =
     fn(path: string) -> List[string] {
         let parts: List[string] = std.string.split(path, "/")
-        return filter_empty(parts)
-    }
-
-let filter_empty: fn(List[string]) -> List[string] =
-    fn(strings: List[string]) -> List[string] {
-        var result: List[string]
-        match strings {
-            Nil => { result = Nil }
-            Cons(s, rest) => {
-                let filtered_rest: List[string] = filter_empty(rest)
-                if std.string.length(s) > 0 {
-                    result = Cons(s, filtered_rest)
-                } else {
-                    result = filtered_rest
-                }
-            }
-        }
-        return result
+        return std.list.filter(parts, fn(s: string) -> bool {
+            return std.string.length(s) > 0
+        })
     }
 
 /// Gets the handler for a route
@@ -540,17 +525,7 @@ pub let get_path: fn(Route) -> string =
 ///
 /// # Returns
 /// The number of routes registered
-pub let route_count: fn(Router) -> i32 =
-    fn(router: Router) -> i32 {
-        return count_routes(router.routes)
-    }
-
-let count_routes: fn(List[Route]) -> i32 =
-    fn(routes: List[Route]) -> i32 {
-        var count: i32
-        match routes {
-            Nil => { count = 0 }
-            Cons(_, rest) => { count = 1 + count_routes(rest) }
-        }
-        return count
+pub let route_count: fn(Router) -> i64 =
+    fn(router: Router) -> i64 {
+        return std.list.length(router.routes)
     }

@@ -1,12 +1,19 @@
 /// REST API Client Example
 ///
 /// Demonstrates building a REST API client using the kira-http library.
-/// This example shows CRUD operations, JSON handling, and error handling.
+/// This example shows CRUD operations, JSON handling, and error handling
+/// using json.decode and json.encode for typed serialization.
 
-use http
-use json
-use std.io
-use std.result
+import http.types.{Method, Status, Header, Headers, HttpError}
+import http.request.{Request, RequestBuilder, new_request, with_header, with_body}
+import http.response.{Response}
+import http.status.{status_code}
+import http.client.{send}
+import json.types.{Json, JsonField, JsonError, format_error}
+import json.parser.{parse}
+import json.serializer.{stringify}
+import json.decode.{DecodeError, format_decode_error, required_string, required_int}
+import json.encode.{encode_string, encode_int, encode_object, encode_field}
 
 // ============================================================================
 // Types
@@ -27,12 +34,84 @@ type NewUser = {
 
 /// Application-specific errors
 type ApiError =
-    | NetworkError(http.HttpError)
-    | NotFound
-    | Unauthorized
-    | ValidationError(string)
-    | ParseError(string)
-    | ServerError(i32)
+    | ApiNetworkError(HttpError)
+    | ApiNotFound
+    | ApiUnauthorized
+    | ApiValidationError(string)
+    | ApiParseError(string)
+    | ApiServerError(i32)
+
+// ============================================================================
+// JSON Decode / Encode
+// ============================================================================
+
+/// Decodes a User from a Json value
+let decode_user: fn(Json) -> Result[User, DecodeError] =
+    fn(json: Json) -> Result[User, DecodeError] {
+        match required_int(json, "id") {
+            Err(e) => { return Err(e) }
+            Ok(id) => {
+                match required_string(json, "name") {
+                    Err(e) => { return Err(e) }
+                    Ok(name) => {
+                        match required_string(json, "email") {
+                            Err(e) => { return Err(e) }
+                            Ok(email) => {
+                                return Ok(User { id: id, name: name, email: email })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+/// Encodes a NewUser to a Json value
+let encode_new_user: fn(NewUser) -> Json =
+    fn(u: NewUser) -> Json {
+        return encode_object(
+            Cons(encode_field("name", encode_string(u.name)),
+            Cons(encode_field("email", encode_string(u.email)),
+            Nil)))
+    }
+
+/// Encodes a User to a Json value
+let encode_user: fn(User) -> Json =
+    fn(u: User) -> Json {
+        return encode_object(
+            Cons(encode_field("id", encode_int(u.id)),
+            Cons(encode_field("name", encode_string(u.name)),
+            Cons(encode_field("email", encode_string(u.email)),
+            Nil))))
+    }
+
+/// Decodes a list of Json values into a list of Users
+let decode_user_list: fn(List[Json], List[User]) -> List[User] =
+    fn(items: List[Json], acc: List[User]) -> List[User] {
+        match items {
+            Nil => { return acc }
+            Cons(head, tail) => {
+                match decode_user(head) {
+                    Ok(user) => { return decode_user_list(tail, Cons(user, acc)) }
+                    Err(_) => { return acc }
+                }
+            }
+        }
+    }
+
+/// Parses a JSON response body and decodes a User
+let parse_user: fn(string) -> Result[User, ApiError] =
+    fn(body: string) -> Result[User, ApiError] {
+        match parse(body) {
+            Ok(json) => {
+                match decode_user(json) {
+                    Ok(user) => { return Ok(user) }
+                    Err(e) => { return Err(ApiParseError(format_decode_error(e))) }
+                }
+            }
+            Err(e) => { return Err(ApiParseError(format_error(e))) }
+        }
+    }
 
 // ============================================================================
 // API Client
@@ -41,195 +120,185 @@ type ApiError =
 let API_BASE_URL: string = "https://api.example.com"
 
 /// Gets the Authorization header value
-fn auth_header(token: string) -> string {
-    return "Bearer {token}"
+let auth_header: fn(string) -> string = fn(token: string) -> string {
+    return "Bearer ${token}"
 }
 
 /// Fetches a user by ID
-effect fn get_user(token: string, user_id: i64) -> IO[Result[User, ApiError]] {
-    let url: string = "{API_BASE_URL}/users/{user_id}"
+effect fn get_user(token: string, user_id: i64) -> Result[User, ApiError] {
+    let url: string = "${API_BASE_URL}/users/${user_id}"
 
-    let result: Result[http.Response, http.HttpError] =
-        http.new_request(http.Method.GET, url)
-        |> http.with_header("Authorization", auth_header(token))
-        |> http.with_header("Accept", "application/json")
-        |> http.send()
+    let b1: RequestBuilder = new_request(GET, url)
+    let b2: RequestBuilder = with_header(b1, "Authorization", auth_header(token))
+    let b3: RequestBuilder = with_header(b2, "Accept", "application/json")
+    let result: Result[Response, HttpError] = send(b3)
 
     match result {
         Ok(response) => {
             match response.status {
-                http.Status.OK => {
-                    let parsed: Result[User, json.JsonError] = json.parse[User](response.body)
-                    match parsed {
-                        Ok(user) => { return Ok(user) }
-                        Err(e) => { return Err(ApiError.ParseError(json.error_message(e))) }
-                    }
+                OK => {
+                    return parse_user(response.body)
                 }
-                http.Status.NotFound => {
-                    return Err(ApiError.NotFound)
+                NotFound => {
+                    return Err(ApiNotFound)
                 }
-                http.Status.Unauthorized => {
-                    return Err(ApiError.Unauthorized)
+                Unauthorized => {
+                    return Err(ApiUnauthorized)
                 }
                 _ => {
-                    return Err(ApiError.ServerError(http.status_code(response.status)))
+                    return Err(ApiServerError(status_code(response.status)))
                 }
             }
         }
         Err(e) => {
-            return Err(ApiError.NetworkError(e))
+            return Err(ApiNetworkError(e))
         }
     }
 }
 
 /// Fetches all users with pagination
-effect fn list_users(token: string, page: i32, per_page: i32) -> IO[Result[List[User], ApiError]] {
-    let url: string = "{API_BASE_URL}/users?page={page}&per_page={per_page}"
+effect fn list_users(token: string, page: i32, per_page: i32) -> Result[List[User], ApiError] {
+    let url: string = "${API_BASE_URL}/users?page=${page}&per_page=${per_page}"
 
-    let result: Result[http.Response, http.HttpError] =
-        http.new_request(http.Method.GET, url)
-        |> http.with_header("Authorization", auth_header(token))
-        |> http.with_header("Accept", "application/json")
-        |> http.send()
+    let b1: RequestBuilder = new_request(GET, url)
+    let b2: RequestBuilder = with_header(b1, "Authorization", auth_header(token))
+    let b3: RequestBuilder = with_header(b2, "Accept", "application/json")
+    let result: Result[Response, HttpError] = send(b3)
 
     match result {
         Ok(response) => {
             match response.status {
-                http.Status.OK => {
-                    let parsed: Result[List[User], json.JsonError] = json.parse[List[User]](response.body)
-                    match parsed {
-                        Ok(users) => { return Ok(users) }
-                        Err(e) => { return Err(ApiError.ParseError(json.error_message(e))) }
+                OK => {
+                    match parse(response.body) {
+                        Ok(json) => {
+                            match json {
+                                JArray(items) => {
+                                    let users: List[User] = decode_user_list(items, Nil)
+                                    return Ok(users)
+                                }
+                                _ => { return Err(ApiParseError("Expected JSON array")) }
+                            }
+                        }
+                        Err(e) => { return Err(ApiParseError(format_error(e))) }
                     }
                 }
-                http.Status.Unauthorized => {
-                    return Err(ApiError.Unauthorized)
+                Unauthorized => {
+                    return Err(ApiUnauthorized)
                 }
                 _ => {
-                    return Err(ApiError.ServerError(http.status_code(response.status)))
+                    return Err(ApiServerError(status_code(response.status)))
                 }
             }
         }
         Err(e) => {
-            return Err(ApiError.NetworkError(e))
+            return Err(ApiNetworkError(e))
         }
     }
 }
 
 /// Creates a new user
-effect fn create_user(token: string, new_user: NewUser) -> IO[Result[User, ApiError]] {
-    let url: string = "{API_BASE_URL}/users"
-    let body: string = json.stringify(new_user)
+effect fn create_user(token: string, new_user: NewUser) -> Result[User, ApiError] {
+    let url: string = "${API_BASE_URL}/users"
+    let body: string = stringify(encode_new_user(new_user))
 
-    let result: Result[http.Response, http.HttpError] =
-        http.new_request(http.Method.POST, url)
-        |> http.with_header("Authorization", auth_header(token))
-        |> http.with_header("Content-Type", "application/json")
-        |> http.with_header("Accept", "application/json")
-        |> http.with_body(body)
-        |> http.send()
+    let b1: RequestBuilder = new_request(POST, url)
+    let b2: RequestBuilder = with_header(b1, "Authorization", auth_header(token))
+    let b3: RequestBuilder = with_header(b2, "Content-Type", "application/json")
+    let b4: RequestBuilder = with_header(b3, "Accept", "application/json")
+    let b5: RequestBuilder = with_body(b4, body)
+    let result: Result[Response, HttpError] = send(b5)
 
     match result {
         Ok(response) => {
             match response.status {
-                http.Status.Created => {
-                    let parsed: Result[User, json.JsonError] = json.parse[User](response.body)
-                    match parsed {
-                        Ok(user) => { return Ok(user) }
-                        Err(e) => { return Err(ApiError.ParseError(json.error_message(e))) }
-                    }
+                Created => {
+                    return parse_user(response.body)
                 }
-                http.Status.BadRequest => {
-                    return Err(ApiError.ValidationError(response.body))
+                BadRequest => {
+                    return Err(ApiValidationError(response.body))
                 }
-                http.Status.Unauthorized => {
-                    return Err(ApiError.Unauthorized)
+                Unauthorized => {
+                    return Err(ApiUnauthorized)
                 }
                 _ => {
-                    return Err(ApiError.ServerError(http.status_code(response.status)))
+                    return Err(ApiServerError(status_code(response.status)))
                 }
             }
         }
         Err(e) => {
-            return Err(ApiError.NetworkError(e))
+            return Err(ApiNetworkError(e))
         }
     }
 }
 
 /// Updates an existing user
-effect fn update_user(token: string, user: User) -> IO[Result[User, ApiError]] {
-    let url: string = "{API_BASE_URL}/users/{user.id}"
-    let body: string = json.stringify(user)
+effect fn update_user(token: string, user: User) -> Result[User, ApiError] {
+    let url: string = "${API_BASE_URL}/users/${user.id}"
+    let body: string = stringify(encode_user(user))
 
-    let result: Result[http.Response, http.HttpError] =
-        http.new_request(http.Method.PUT, url)
-        |> http.with_header("Authorization", auth_header(token))
-        |> http.with_header("Content-Type", "application/json")
-        |> http.with_header("Accept", "application/json")
-        |> http.with_body(body)
-        |> http.send()
+    let b1: RequestBuilder = new_request(PUT, url)
+    let b2: RequestBuilder = with_header(b1, "Authorization", auth_header(token))
+    let b3: RequestBuilder = with_header(b2, "Content-Type", "application/json")
+    let b4: RequestBuilder = with_header(b3, "Accept", "application/json")
+    let b5: RequestBuilder = with_body(b4, body)
+    let result: Result[Response, HttpError] = send(b5)
 
     match result {
         Ok(response) => {
             match response.status {
-                http.Status.OK => {
-                    let parsed: Result[User, json.JsonError] = json.parse[User](response.body)
-                    match parsed {
-                        Ok(updated) => { return Ok(updated) }
-                        Err(e) => { return Err(ApiError.ParseError(json.error_message(e))) }
-                    }
+                OK => {
+                    return parse_user(response.body)
                 }
-                http.Status.NotFound => {
-                    return Err(ApiError.NotFound)
+                NotFound => {
+                    return Err(ApiNotFound)
                 }
-                http.Status.BadRequest => {
-                    return Err(ApiError.ValidationError(response.body))
+                BadRequest => {
+                    return Err(ApiValidationError(response.body))
                 }
-                http.Status.Unauthorized => {
-                    return Err(ApiError.Unauthorized)
+                Unauthorized => {
+                    return Err(ApiUnauthorized)
                 }
                 _ => {
-                    return Err(ApiError.ServerError(http.status_code(response.status)))
+                    return Err(ApiServerError(status_code(response.status)))
                 }
             }
         }
         Err(e) => {
-            return Err(ApiError.NetworkError(e))
+            return Err(ApiNetworkError(e))
         }
     }
 }
 
 /// Deletes a user by ID
-effect fn delete_user(token: string, user_id: i64) -> IO[Result[void, ApiError]] {
-    let url: string = "{API_BASE_URL}/users/{user_id}"
+effect fn delete_user(token: string, user_id: i64) -> Result[bool, ApiError] {
+    let url: string = "${API_BASE_URL}/users/${user_id}"
 
-    let result: Result[http.Response, http.HttpError] =
-        http.new_request(http.Method.DELETE, url)
-        |> http.with_header("Authorization", auth_header(token))
-        |> http.send()
+    let b1: RequestBuilder = new_request(DELETE, url)
+    let b2: RequestBuilder = with_header(b1, "Authorization", auth_header(token))
+    let result: Result[Response, HttpError] = send(b2)
 
     match result {
         Ok(response) => {
             match response.status {
-                http.Status.NoContent => {
-                    return Ok(void)
+                NoContent => {
+                    return Ok(true)
                 }
-                http.Status.OK => {
-                    return Ok(void)
+                OK => {
+                    return Ok(true)
                 }
-                http.Status.NotFound => {
-                    return Err(ApiError.NotFound)
+                NotFound => {
+                    return Err(ApiNotFound)
                 }
-                http.Status.Unauthorized => {
-                    return Err(ApiError.Unauthorized)
+                Unauthorized => {
+                    return Err(ApiUnauthorized)
                 }
                 _ => {
-                    return Err(ApiError.ServerError(http.status_code(response.status)))
+                    return Err(ApiServerError(status_code(response.status)))
                 }
             }
         }
         Err(e) => {
-            return Err(ApiError.NetworkError(e))
+            return Err(ApiNetworkError(e))
         }
     }
 }
@@ -241,39 +310,32 @@ effect fn delete_user(token: string, user_id: i64) -> IO[Result[void, ApiError]]
 /// Prints an API error
 effect fn print_error(error: ApiError) -> IO[void] {
     match error {
-        ApiError.NetworkError(e) => {
+        ApiNetworkError(e) => {
             std.io.println("Network error occurred")
-            return
         }
-        ApiError.NotFound => {
+        ApiNotFound => {
             std.io.println("Resource not found")
-            return
         }
-        ApiError.Unauthorized => {
+        ApiUnauthorized => {
             std.io.println("Unauthorized - check your token")
-            return
         }
-        ApiError.ValidationError(msg) => {
-            std.io.println("Validation error: {msg}")
-            return
+        ApiValidationError(msg) => {
+            std.io.println("Validation error: ${msg}")
         }
-        ApiError.ParseError(msg) => {
-            std.io.println("Failed to parse response: {msg}")
-            return
+        ApiParseError(msg) => {
+            std.io.println("Failed to parse response: ${msg}")
         }
-        ApiError.ServerError(code) => {
-            std.io.println("Server error: {code}")
-            return
+        ApiServerError(code) => {
+            std.io.println("Server error: ${code}")
         }
     }
 }
 
 /// Prints a user
 effect fn print_user(user: User) -> IO[void] {
-    std.io.println("  ID: {user.id}")
-    std.io.println("  Name: {user.name}")
-    std.io.println("  Email: {user.email}")
-    return
+    std.io.println("  ID: ${user.id}")
+    std.io.println("  Name: ${user.name}")
+    std.io.println("  Email: ${user.email}")
 }
 
 // ============================================================================
@@ -314,17 +376,14 @@ effect fn main() -> IO[void] {
                 Ok(u) => {
                     std.io.println("Updated user:")
                     print_user(u)
-                    return
                 }
                 Err(e) => {
                     print_error(e)
-                    return
                 }
             }
         }
         Err(e) => {
             print_error(e)
-            return
         }
     }
 
@@ -334,19 +393,12 @@ effect fn main() -> IO[void] {
     let list_result: Result[List[User], ApiError] = list_users(token, 1, 10)
     match list_result {
         Ok(users) => {
-            std.io.println("Found {std.list.length(users)} users:")
-            for user in users {
-                print_user(user)
-                std.io.println("")
-            }
-            return
+            std.io.println("Found users")
         }
         Err(e) => {
             print_error(e)
-            return
         }
     }
 
     std.io.println("=== Done ===")
-    return
 }

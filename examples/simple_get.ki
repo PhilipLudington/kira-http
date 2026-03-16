@@ -3,54 +3,62 @@
 /// Demonstrates making basic HTTP GET requests using the kira-http library.
 /// This example fetches data from a URL and displays the response.
 
-use http
-use std.io
-use std.result
+import http.types.{Method, Status, Header, Headers, HttpError}
+import http.request.{Request, RequestBuilder, new_request, with_header, build}
+import http.response.{Response}
+import http.status.{status_code}
+import http.client.{send}
+
+/// Prints response headers recursively
+effect fn print_headers(headers: Headers) -> IO[void] {
+    match headers {
+        Nil => { }
+        Cons(header, rest) => {
+            std.io.println("  ${header.name}: ${header.value}")
+            print_headers(rest)
+        }
+    }
+}
 
 /// Fetches data from a URL and prints the response
 effect fn fetch_and_print(url: string) -> IO[void] {
-    std.io.println("Fetching: {url}")
+    std.io.println("Fetching: ${url}")
     std.io.println("")
 
-    let result: Result[http.Response, http.HttpError] = http.get(url)
+    let b0: RequestBuilder = new_request(GET, url)
+    let result: Result[Response, HttpError] = send(b0)
 
     match result {
         Ok(response) => {
-            std.io.println("Status: {http.status_code(response.status)}")
-            std.io.println("Body length: {std.string.length(response.body)} bytes")
+            std.io.println("Status: ${status_code(response.status)}")
+            std.io.println("Body length: ${std.string.length(response.body)} bytes")
             std.io.println("")
 
             // Print first 500 characters of body
-            let preview: string = std.string.substring(response.body, 0, 500)
+            let preview: string = std.string.substring(response.body, 0, 500) ?? ""
             std.io.println("Response preview:")
             std.io.println(preview)
 
             if std.string.length(response.body) > 500 {
                 std.io.println("...")
             }
-            return
         }
         Err(error) => {
             match error {
-                http.HttpError.ConnectionFailed(msg) => {
-                    std.io.println("Connection failed: {msg}")
-                    return
+                ConnectionFailed(msg) => {
+                    std.io.println("Connection failed: ${msg}")
                 }
-                http.HttpError.Timeout => {
+                Timeout => {
                     std.io.println("Request timed out")
-                    return
                 }
-                http.HttpError.InvalidUrl(msg) => {
-                    std.io.println("Invalid URL: {msg}")
-                    return
+                InvalidUrl(msg) => {
+                    std.io.println("Invalid URL: ${msg}")
                 }
-                http.HttpError.InvalidResponse(msg) => {
-                    std.io.println("Invalid response: {msg}")
-                    return
+                InvalidResponse(msg) => {
+                    std.io.println("Invalid response: ${msg}")
                 }
-                http.HttpError.TlsError(msg) => {
-                    std.io.println("TLS error: {msg}")
-                    return
+                TlsError(msg) => {
+                    std.io.println("TLS error: ${msg}")
                 }
             }
         }
@@ -59,29 +67,24 @@ effect fn fetch_and_print(url: string) -> IO[void] {
 
 /// Makes a GET request with custom headers
 effect fn fetch_with_headers(url: string) -> IO[void] {
-    std.io.println("Fetching with custom headers: {url}")
+    std.io.println("Fetching with custom headers: ${url}")
     std.io.println("")
 
-    let result: Result[http.Response, http.HttpError] =
-        http.new_request(http.Method.GET, url)
-        |> http.with_header("Accept", "application/json")
-        |> http.with_header("User-Agent", "kira-http/1.0")
-        |> http.send()
+    let b1: RequestBuilder = new_request(GET, url)
+    let b2: RequestBuilder = with_header(b1, "Accept", "application/json")
+    let b3: RequestBuilder = with_header(b2, "User-Agent", "kira-http/1.0")
+    let result: Result[Response, HttpError] = send(b3)
 
     match result {
         Ok(response) => {
-            std.io.println("Status: {http.status_code(response.status)}")
+            std.io.println("Status: ${status_code(response.status)}")
 
             // Print response headers
             std.io.println("Response headers:")
-            for header in response.headers {
-                std.io.println("  {header.name}: {header.value}")
-            }
-            return
+            print_headers(response.headers)
         }
         Err(error) => {
             std.io.println("Request failed")
-            return
         }
     }
 }
@@ -102,5 +105,4 @@ effect fn main() -> IO[void] {
     std.io.println("")
 
     std.io.println("=== Done ===")
-    return
 }

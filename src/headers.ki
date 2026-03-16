@@ -18,24 +18,13 @@ import http.types.{Header, Headers}
 pub let get_header: fn(Headers, string) -> Option[string] =
     fn(headers: Headers, name: string) -> Option[string] {
         let lower_name: string = std.string.to_lower(name)
-        return find_header_value(headers, lower_name)
-    }
-
-let find_header_value: fn(Headers, string) -> Option[string] =
-    fn(headers: Headers, lower_name: string) -> Option[string] {
-        var result: Option[string]
-        match headers {
-            Nil => { result = None }
-            Cons(header, rest) => {
-                let header_lower: string = std.string.to_lower(header.name)
-                if header_lower == lower_name {
-                    result = Some(header.value)
-                } else {
-                    result = find_header_value(rest, lower_name)
-                }
-            }
+        let found: Option[Header] = std.list.find(headers, fn(h: Header) -> bool {
+            return std.string.to_lower(h.name) == lower_name
+        })
+        match found {
+            Some(h) => { return Some(h.value) }
+            None => { return None }
         }
-        return result
     }
 
 /// Sets a header value, replacing any existing header with the same name
@@ -65,24 +54,9 @@ pub let set_header: fn(Headers, string, string) -> Headers =
 pub let remove_header: fn(Headers, string) -> Headers =
     fn(headers: Headers, name: string) -> Headers {
         let lower_name: string = std.string.to_lower(name)
-        return filter_headers(headers, lower_name)
-    }
-
-let filter_headers: fn(Headers, string) -> Headers =
-    fn(headers: Headers, lower_name: string) -> Headers {
-        var result: Headers
-        match headers {
-            Nil => { result = Nil }
-            Cons(header, rest) => {
-                let header_lower: string = std.string.to_lower(header.name)
-                if header_lower == lower_name {
-                    result = filter_headers(rest, lower_name)
-                } else {
-                    result = Cons(header, filter_headers(rest, lower_name))
-                }
-            }
-        }
-        return result
+        return std.list.filter(headers, fn(h: Header) -> bool {
+            return std.string.to_lower(h.name) != lower_name
+        })
     }
 
 /// Creates a Content-Type header

@@ -2,3 +2,4 @@
 
 [modules]
 http = "src"
+json = "../kira-json/src/json"

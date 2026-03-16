@@ -487,11 +487,11 @@ let segments_match: fn(List[string], List[string]) -> bool =
 /// ```
 pub let url_decode: fn(string) -> string =
     fn(s: string) -> string {
-        return decode_chars(s, 0, std.string.length(s), "")
+        return decode_chars(s, 0i64, std.string.length(s), "")
     }
 
-let decode_chars: fn(string, i32, i32, string) -> string =
-    fn(s: string, pos: i32, len: i32, result: string) -> string {
+let decode_chars: fn(string, i64, i64, string) -> string =
+    fn(s: string, pos: i64, len: i64, result: string) -> string {
         if pos >= len {
             return result
         }

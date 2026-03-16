@@ -195,7 +195,7 @@ pub let timeout: fn(i32) -> Middleware =
                 // In a real implementation, this would be handled by the server
                 return Response {
                     status: response.status,
-                    headers: set_header(response.headers, "X-Timeout-Ms", std.string.from_int(ms)),
+                    headers: set_header(response.headers, "X-Timeout-Ms", to_string(ms)),
                     body: response.body
                 }
             }

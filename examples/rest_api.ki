@@ -1,12 +1,20 @@
 /// REST API Server Example
 ///
 /// Demonstrates building a full REST API server with CRUD operations,
-/// JSON handling, middleware, and proper error handling.
+/// JSON handling using json.decode and json.encode, and proper error handling.
 
-use http
-use json
-use std.io
-use std.list
+import http.types.{Method, Status, HttpError}
+import http.request.{Request, path_param}
+import http.response.{Response, ok, no_content, json_ok, json_created, json_response}
+import http.router.{Router, Handler, Route, new_router, add_route, set_not_found, use_middleware, get, post, put, delete, patch}
+import http.server.{serve}
+import http.middleware.{Middleware, logging, cors}
+import http.status.{status_code}
+import json.types.{Json, JsonField, JsonError, format_error}
+import json.parser.{parse}
+import json.serializer.{stringify}
+import json.decode.{DecodeError, format_decode_error, required_string, optional_string, optional_bool}
+import json.encode.{encode_string, encode_int, encode_bool, encode_object, encode_field, encode_array}
 
 // ============================================================================
 // Types
@@ -30,41 +38,93 @@ type UpdateTodoRequest = {
     completed: Option[bool]
 }
 
-/// JSON API error response
-type ApiErrorResponse = {
-    error: string,
-    message: string
-}
-
 // ============================================================================
-// In-Memory Store (simulated database)
+// JSON Decode / Encode
 // ============================================================================
 
-/// Global todo list (in a real app, this would be a database)
-var todos: List[Todo] = Nil
-var next_id: i64 = 1
-
-/// Finds a todo by ID
-fn find_todo(id: i64) -> Option[Todo] {
-    return std.list.find(todos, fn(t: Todo) -> bool { return t.id == id })
-}
-
-/// Removes a todo by ID and returns whether it was found
-fn remove_todo(id: i64) -> bool {
-    let original_length: i32 = std.list.length(todos)
-    todos = std.list.filter(todos, fn(t: Todo) -> bool { return t.id != id })
-    return std.list.length(todos) < original_length
-}
-
-/// Updates a todo in the list
-fn update_todo_in_list(updated: Todo) -> void {
-    todos = std.list.map(todos, fn(t: Todo) -> Todo {
-        if t.id == updated.id {
-            return updated
+/// Decodes a CreateTodoRequest from Json
+let decode_create_todo: fn(Json) -> Result[CreateTodoRequest, DecodeError] =
+    fn(json: Json) -> Result[CreateTodoRequest, DecodeError] {
+        match required_string(json, "title") {
+            Ok(title) => { return Ok(CreateTodoRequest { title: title }) }
+            Err(e) => { return Err(e) }
         }
-        return t
-    })
-    return
+    }
+
+/// Decodes an UpdateTodoRequest from Json
+let decode_update_todo: fn(Json) -> Result[UpdateTodoRequest, DecodeError] =
+    fn(json: Json) -> Result[UpdateTodoRequest, DecodeError] {
+        let title: Option[string] = optional_string(json, "title")
+        let completed: Option[bool] = optional_bool(json, "completed")
+        return Ok(UpdateTodoRequest { title: title, completed: completed })
+    }
+
+/// Encodes a Todo to Json
+let encode_todo: fn(Todo) -> Json =
+    fn(t: Todo) -> Json {
+        return encode_object(
+            Cons(encode_field("id", encode_int(t.id)),
+            Cons(encode_field("title", encode_string(t.title)),
+            Cons(encode_field("completed", encode_bool(t.completed)),
+            Nil))))
+    }
+
+/// Encodes a list of Todos to a Json array
+let encode_todo_list: fn(List[Todo]) -> Json =
+    fn(list: List[Todo]) -> Json {
+        return encode_array(encode_todo_items(list, Nil))
+    }
+
+let encode_todo_items: fn(List[Todo], List[Json]) -> List[Json] =
+    fn(list: List[Todo], acc: List[Json]) -> List[Json] {
+        match list {
+            Nil => { return list_reverse_json(acc) }
+            Cons(head, tail) => { return encode_todo_items(tail, Cons(encode_todo(head), acc)) }
+        }
+    }
+
+let list_reverse_json: fn(List[Json]) -> List[Json] =
+    fn(list: List[Json]) -> List[Json] {
+        return list_reverse_json_acc(list, Nil)
+    }
+
+let list_reverse_json_acc: fn(List[Json], List[Json]) -> List[Json] =
+    fn(list: List[Json], acc: List[Json]) -> List[Json] {
+        match list {
+            Nil => { return acc }
+            Cons(head, tail) => { return list_reverse_json_acc(tail, Cons(head, acc)) }
+        }
+    }
+
+/// Encodes an error response to a JSON string
+let encode_error_body: fn(string, string) -> string =
+    fn(error: string, message: string) -> string {
+        return stringify(encode_object(
+            Cons(encode_field("error", encode_string(error)),
+            Cons(encode_field("message", encode_string(message)),
+            Nil))))
+    }
+
+/// Creates a JSON error response
+let json_error: fn(Status, string, string) -> Response =
+    fn(status: Status, error: string, message: string) -> Response {
+        let body: string = encode_error_body(error, message)
+        return json_response(status, body)
+    }
+
+// ============================================================================
+// Sample Data
+// ============================================================================
+
+/// Returns sample todos for demonstration
+let sample_todos: fn() -> List[Todo] = fn() -> List[Todo] {
+    return Cons(
+        Todo { id: 1i64, title: "Learn Kira", completed: true },
+        Cons(
+            Todo { id: 2i64, title: "Build a REST API", completed: false },
+            Cons(
+                Todo { id: 3i64, title: "Write tests", completed: false },
+                Nil)))
 }
 
 // ============================================================================
@@ -72,233 +132,174 @@ fn update_todo_in_list(updated: Todo) -> void {
 // ============================================================================
 
 /// GET / - Welcome message
-fn handle_root(req: http.Request) -> http.Response {
-    let body: string = "{\"message\": \"Welcome to the Todo API\", \"version\": \"1.0\"}"
-    return http.json_ok(body)
+fn handle_root(req: Request) -> Response {
+    let body: string = stringify(encode_object(
+        Cons(encode_field("message", encode_string("Welcome to the Todo API")),
+        Cons(encode_field("version", encode_string("1.0")),
+        Nil))))
+    return json_ok(body)
 }
 
 /// GET /todos - List all todos
-fn handle_list_todos(req: http.Request) -> http.Response {
-    let body: string = json.stringify(todos)
-    return http.json_ok(body)
+fn handle_list_todos(req: Request) -> Response {
+    let body: string = stringify(encode_todo_list(sample_todos()))
+    return json_ok(body)
 }
 
-/// GET /todos/:id - Get a single todo
-fn handle_get_todo(req: http.Request) -> http.Response {
-    let id_param: Option[string] = http.path_param(req, "id")
+/// GET /todos/:id - Get a single todo (demonstrates decode of path param)
+fn handle_get_todo(req: Request) -> Response {
+    let id_param: Option[string] = path_param(req, "id")
 
     match id_param {
         Some(id_str) => {
-            let id_result: Result[i64, ParseError] = std.string.parse_i64(id_str)
+            let id_result: Result[i64, string] = std.string.parse_i64(id_str)
             match id_result {
                 Ok(id) => {
-                    let todo: Option[Todo] = find_todo(id)
+                    let todo: Option[Todo] = find_by_id(sample_todos(), id)
                     match todo {
                         Some(t) => {
-                            return http.json_ok(json.stringify(t))
+                            return json_ok(stringify(encode_todo(t)))
                         }
                         None => {
-                            return json_error(http.Status.NotFound, "not_found", "Todo not found")
+                            return json_error(NotFound, "not_found", "Todo not found")
                         }
                     }
                 }
                 Err(_) => {
-                    return json_error(http.Status.BadRequest, "invalid_id", "Invalid todo ID")
+                    return json_error(BadRequest, "invalid_id", "Invalid todo ID")
                 }
             }
         }
         None => {
-            return json_error(http.Status.BadRequest, "missing_id", "Todo ID is required")
+            return json_error(BadRequest, "missing_id", "Todo ID is required")
         }
     }
 }
 
-/// POST /todos - Create a new todo
-fn handle_create_todo(req: http.Request) -> http.Response {
+/// POST /todos - Create a new todo (demonstrates decode of request body)
+fn handle_create_todo(req: Request) -> Response {
     match req.body {
         Some(body) => {
-            let parsed: Result[CreateTodoRequest, json.JsonError] = json.parse[CreateTodoRequest](body)
-            match parsed {
-                Ok(create_req) => {
-                    if std.string.is_empty(create_req.title) {
-                        return json_error(http.Status.BadRequest, "validation_error", "Title is required")
-                    }
+            match parse(body) {
+                Ok(json) => {
+                    match decode_create_todo(json) {
+                        Ok(create_req) => {
+                            if std.string.length(create_req.title) == 0 {
+                                return json_error(BadRequest, "validation_error", "Title is required")
+                            }
 
-                    let todo: Todo = Todo {
-                        id: next_id,
-                        title: create_req.title,
-                        completed: false
-                    }
-                    next_id = next_id + 1
-                    todos = Cons(todo, todos)
+                            let todo: Todo = Todo {
+                                id: 4i64,
+                                title: create_req.title,
+                                completed: false
+                            }
 
-                    return http.json_created(json.stringify(todo))
+                            return json_created(stringify(encode_todo(todo)))
+                        }
+                        Err(e) => {
+                            return json_error(BadRequest, "decode_error", format_decode_error(e))
+                        }
+                    }
                 }
-                Err(e) => {
-                    return json_error(http.Status.BadRequest, "parse_error", "Invalid JSON body")
+                Err(_) => {
+                    return json_error(BadRequest, "parse_error", "Invalid JSON body")
                 }
             }
         }
         None => {
-            return json_error(http.Status.BadRequest, "missing_body", "Request body is required")
+            return json_error(BadRequest, "missing_body", "Request body is required")
         }
     }
 }
 
-/// PUT /todos/:id - Update a todo
-fn handle_update_todo(req: http.Request) -> http.Response {
-    let id_param: Option[string] = http.path_param(req, "id")
+/// PUT /todos/:id - Update a todo (demonstrates decode of optional fields)
+fn handle_update_todo(req: Request) -> Response {
+    let id_param: Option[string] = path_param(req, "id")
 
     match id_param {
         Some(id_str) => {
-            let id_result: Result[i64, ParseError] = std.string.parse_i64(id_str)
+            let id_result: Result[i64, string] = std.string.parse_i64(id_str)
             match id_result {
                 Ok(id) => {
-                    let existing: Option[Todo] = find_todo(id)
+                    let existing: Option[Todo] = find_by_id(sample_todos(), id)
                     match existing {
                         Some(todo) => {
                             match req.body {
                                 Some(body) => {
-                                    let parsed: Result[UpdateTodoRequest, json.JsonError] = json.parse[UpdateTodoRequest](body)
-                                    match parsed {
-                                        Ok(update_req) => {
-                                            let updated_title: string = match update_req.title {
-                                                Some(t) => { t }
-                                                None => { todo.title }
-                                            }
-                                            let updated_completed: bool = match update_req.completed {
-                                                Some(c) => { c }
-                                                None => { todo.completed }
-                                            }
+                                    match parse(body) {
+                                        Ok(json) => {
+                                            match decode_update_todo(json) {
+                                                Ok(update_req) => {
+                                                    let updated_title: string = match update_req.title {
+                                                        Some(t) => { t }
+                                                        None => { todo.title }
+                                                    }
+                                                    let updated_completed: bool = match update_req.completed {
+                                                        Some(c) => { c }
+                                                        None => { todo.completed }
+                                                    }
 
-                                            let updated: Todo = Todo {
-                                                id: todo.id,
-                                                title: updated_title,
-                                                completed: updated_completed
-                                            }
-                                            update_todo_in_list(updated)
+                                                    let updated: Todo = Todo {
+                                                        id: todo.id,
+                                                        title: updated_title,
+                                                        completed: updated_completed
+                                                    }
 
-                                            return http.json_ok(json.stringify(updated))
+                                                    return json_ok(stringify(encode_todo(updated)))
+                                                }
+                                                Err(e) => {
+                                                    return json_error(BadRequest, "decode_error", format_decode_error(e))
+                                                }
+                                            }
                                         }
                                         Err(_) => {
-                                            return json_error(http.Status.BadRequest, "parse_error", "Invalid JSON body")
+                                            return json_error(BadRequest, "parse_error", "Invalid JSON body")
                                         }
                                     }
                                 }
                                 None => {
-                                    return json_error(http.Status.BadRequest, "missing_body", "Request body is required")
+                                    return json_error(BadRequest, "missing_body", "Request body is required")
                                 }
                             }
                         }
                         None => {
-                            return json_error(http.Status.NotFound, "not_found", "Todo not found")
+                            return json_error(NotFound, "not_found", "Todo not found")
                         }
                     }
                 }
                 Err(_) => {
-                    return json_error(http.Status.BadRequest, "invalid_id", "Invalid todo ID")
+                    return json_error(BadRequest, "invalid_id", "Invalid todo ID")
                 }
             }
         }
         None => {
-            return json_error(http.Status.BadRequest, "missing_id", "Todo ID is required")
+            return json_error(BadRequest, "missing_id", "Todo ID is required")
         }
     }
 }
 
-/// DELETE /todos/:id - Delete a todo
-fn handle_delete_todo(req: http.Request) -> http.Response {
-    let id_param: Option[string] = http.path_param(req, "id")
-
-    match id_param {
-        Some(id_str) => {
-            let id_result: Result[i64, ParseError] = std.string.parse_i64(id_str)
-            match id_result {
-                Ok(id) => {
-                    let removed: bool = remove_todo(id)
-                    if removed {
-                        return http.no_content()
-                    }
-                    return json_error(http.Status.NotFound, "not_found", "Todo not found")
-                }
-                Err(_) => {
-                    return json_error(http.Status.BadRequest, "invalid_id", "Invalid todo ID")
-                }
-            }
-        }
-        None => {
-            return json_error(http.Status.BadRequest, "missing_id", "Todo ID is required")
-        }
-    }
-}
-
-/// PATCH /todos/:id/complete - Mark a todo as complete
-fn handle_complete_todo(req: http.Request) -> http.Response {
-    let id_param: Option[string] = http.path_param(req, "id")
-
-    match id_param {
-        Some(id_str) => {
-            let id_result: Result[i64, ParseError] = std.string.parse_i64(id_str)
-            match id_result {
-                Ok(id) => {
-                    let existing: Option[Todo] = find_todo(id)
-                    match existing {
-                        Some(todo) => {
-                            let updated: Todo = Todo {
-                                id: todo.id,
-                                title: todo.title,
-                                completed: true
-                            }
-                            update_todo_in_list(updated)
-                            return http.json_ok(json.stringify(updated))
-                        }
-                        None => {
-                            return json_error(http.Status.NotFound, "not_found", "Todo not found")
-                        }
-                    }
-                }
-                Err(_) => {
-                    return json_error(http.Status.BadRequest, "invalid_id", "Invalid todo ID")
-                }
-            }
-        }
-        None => {
-            return json_error(http.Status.BadRequest, "missing_id", "Todo ID is required")
-        }
-    }
+/// Custom 404 handler for unmatched routes
+fn handle_not_found(req: Request) -> Response {
+    return json_error(NotFound, "not_found", "Endpoint not found")
 }
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
 
-/// Creates a JSON error response
-fn json_error(status: http.Status, error: string, message: string) -> http.Response {
-    let body: string = json.stringify(ApiErrorResponse {
-        error: error,
-        message: message
-    })
-    return http.json_response(status, body)
-}
-
-/// Custom 404 handler for unmatched routes
-fn handle_not_found(req: http.Request) -> http.Response {
-    return json_error(http.Status.NotFound, "not_found", "Endpoint not found")
-}
-
-// ============================================================================
-// Middleware
-// ============================================================================
-
-/// Request logging middleware
-fn logging_middleware(next: http.Handler) -> http.Handler {
-    return fn(req: http.Request) -> http.Response {
-        // Log would happen here in a real implementation
-        // std.io.println("[{timestamp}] {req.method} {req.path}")
-        let response: http.Response = next(req)
-        return response
+/// Finds a todo by ID in a list
+let find_by_id: fn(List[Todo], i64) -> Option[Todo] =
+    fn(todos: List[Todo], id: i64) -> Option[Todo] {
+        match todos {
+            Nil => { return None }
+            Cons(head, tail) => {
+                if head.id == id {
+                    return Some(head)
+                }
+                return find_by_id(tail, id)
+            }
+        }
     }
-}
 
 // ============================================================================
 // Main
@@ -310,54 +311,47 @@ effect fn main() -> IO[void] {
     std.io.println("")
 
     // Build the router
-    let router: http.Router = http.new_router()
-        |> http.add_route(http.route_get("/", handle_root))
-        |> http.add_route(http.route_get("/todos", handle_list_todos))
-        |> http.add_route(http.route_get("/todos/:id", handle_get_todo))
-        |> http.add_route(http.route_post("/todos", handle_create_todo))
-        |> http.add_route(http.route_put("/todos/:id", handle_update_todo))
-        |> http.add_route(http.route_delete("/todos/:id", handle_delete_todo))
-        |> http.add_route(http.route_patch("/todos/:id/complete", handle_complete_todo))
-        |> http.set_not_found(handle_not_found)
-        |> http.use_middleware(http.logging())
-        |> http.use_middleware(http.cors(["*"]))
+    let r0: Router = new_router()
+    let r1: Router = add_route(r0, get("/", handle_root))
+    let r2: Router = add_route(r1, get("/todos", handle_list_todos))
+    let r3: Router = add_route(r2, get("/todos/:id", handle_get_todo))
+    let r4: Router = add_route(r3, post("/todos", handle_create_todo))
+    let r5: Router = add_route(r4, put("/todos/:id", handle_update_todo))
+    let r6: Router = set_not_found(r5, handle_not_found)
+    let r7: Router = use_middleware(r6, logging())
+    let router: Router = use_middleware(r7, cors(Cons("*", Nil)))
 
     let port: i32 = 3000
 
-    std.io.println("Todo API Server starting on port {port}...")
+    std.io.println("Todo API Server starting on port ${port}...")
     std.io.println("")
     std.io.println("API Endpoints:")
-    std.io.println("  GET    http://localhost:{port}/")
-    std.io.println("  GET    http://localhost:{port}/todos")
-    std.io.println("  GET    http://localhost:{port}/todos/:id")
-    std.io.println("  POST   http://localhost:{port}/todos")
-    std.io.println("  PUT    http://localhost:{port}/todos/:id")
-    std.io.println("  DELETE http://localhost:{port}/todos/:id")
-    std.io.println("  PATCH  http://localhost:{port}/todos/:id/complete")
+    std.io.println("  GET    http://localhost:${port}/")
+    std.io.println("  GET    http://localhost:${port}/todos")
+    std.io.println("  GET    http://localhost:${port}/todos/:id")
+    std.io.println("  POST   http://localhost:${port}/todos")
+    std.io.println("  PUT    http://localhost:${port}/todos/:id")
     std.io.println("")
     std.io.println("Example usage:")
-    std.io.println("  curl http://localhost:{port}/todos")
-    std.io.println("  curl -X POST -H 'Content-Type: application/json' -d '{{\"title\":\"Learn Kira\"}}' http://localhost:{port}/todos")
+    std.io.println("  curl http://localhost:${port}/todos")
+    std.io.println("  curl -X POST -H 'Content-Type: application/json' -d '{\"title\":\"Learn Kira\"}' http://localhost:${port}/todos")
     std.io.println("")
     std.io.println("Press Ctrl+C to stop the server.")
     std.io.println("")
 
-    let result: Result[void, http.HttpError] = http.serve(port, router)
+    let result: Result[bool, HttpError] = serve(port, router)
 
     match result {
         Ok(_) => {
             std.io.println("Server stopped.")
-            return
         }
         Err(error) => {
             match error {
-                http.HttpError.ConnectionFailed(msg) => {
-                    std.io.println("Failed to start server: {msg}")
-                    return
+                ConnectionFailed(msg) => {
+                    std.io.println("Failed to start server: ${msg}")
                 }
                 _ => {
                     std.io.println("Server error occurred")
-                    return
                 }
             }
         }
